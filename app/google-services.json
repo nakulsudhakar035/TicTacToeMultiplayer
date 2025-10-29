@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "99655268389",
+    "project_id": "letstictactoetogether",
+    "storage_bucket": "letstictactoetogether.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:99655268389:android:d313269c2b93f07350e7cc",
+        "android_client_info": {
+          "package_name": "com.nakul.tictactoe"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBhqba3eW59oBPLC3OkvdCoTKdZIp73YlM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
