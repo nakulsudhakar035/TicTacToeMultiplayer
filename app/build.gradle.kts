@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     //id("com.google.gms.google-services")
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.23"
 }
 
 android {
@@ -51,15 +52,30 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
 
+    implementation(libs.androidx.navigation.compose)
     // Supabase Bill of Materials (BOM)
-    implementation(platform("io.github.jan-tennert.supabase:bom:2.5.0"))
+    implementation(platform(libs.supabase.bom))
+    implementation(libs.supabase.postgrest.kt)
+    implementation(libs.supabase.realtime.kt)
 
-    // Add the modules you need
-    implementation("io.github.jan-tennert.supabase:postgrest-kt")
-    implementation("io.github.jan-tennert.supabase:realtime-kt")
+    implementation(libs.androidx.compose.runtime)
 
     // Ktor client for networking (Realtime needs a WebSocket-capable engine)
-    implementation("io.ktor:ktor-client-cio:2.3.11") // Or ktor-client-android
+    implementation(libs.ktor.client.android)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    implementation(libs.koin.android)
+    implementation(libs.koin.androidx.compose)
+
+    // --- DataStore (profile is stored here) ---
+    implementation(libs.androidx.datastore.preferences)
+
+    // --- Coroutines ---
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
