@@ -31,7 +31,7 @@ class SplashViewModel(
             delay(1500L) // Wait for 1.5 seconds
 
             // 2. Check DataStore for profile
-            val username = userRepository.getUsername()
+            val username = userRepository.getRegisteredUsername()
 
             // 3. Determine and set the final navigation destination
             val destination = if (username.isNullOrBlank()) {

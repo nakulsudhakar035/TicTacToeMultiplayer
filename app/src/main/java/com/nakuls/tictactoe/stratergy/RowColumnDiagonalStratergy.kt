@@ -1,5 +1,6 @@
-package com.nakuls.tictactoe
+package com.nakuls.tictactoe.stratergy
 
+import com.nakuls.tictactoe.WinDetectionStratergy
 import com.nakuls.tictactoe.domain.model.Game
 import com.nakuls.tictactoe.domain.model.Move
 import com.nakuls.tictactoe.domain.model.Player

@@ -5,6 +5,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.nakuls.tictactoe.presentation.screens.home.HomeScreen
 import com.nakuls.tictactoe.presentation.screens.profile.ProfileScreen
 import com.nakuls.tictactoe.presentation.screens.splash.SplashScreen
 
@@ -42,9 +43,11 @@ fun AppNavigation(
 //            )
 //        }
 //
-//        composable(Screen.Home.route) {
-//            HomeScreen(navController = navController)
-//        }
+        composable(Screen.Home.route) {
+            HomeScreen(
+                navController = navController
+            )
+        }
 //
 //        composable(route = Screen.Game.route) { backStackEntry ->
 //            val gameId = backStackEntry.arguments?.getString("gameId")

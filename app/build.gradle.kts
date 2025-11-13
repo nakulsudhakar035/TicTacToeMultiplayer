@@ -2,8 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    //id("com.google.gms.google-services")
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.23"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.2.21"
 }
 
 android {
@@ -18,6 +17,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "SUPABASE_API_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBucW12cG1vZG91YnByc3J4cmh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA5OTY1NTAsImV4cCI6MjA3NjU3MjU1MH0.7ya7rjHL_3Zhuccb38a_qenDjn_SlsloVXnCoFVuPvI\"")
+        buildConfigField("String", "SUPABASE_AUTH_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBucW12cG1vZG91YnByc3J4cmh4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDk5NjU1MCwiZXhwIjoyMDc2NTcyNTUwfQ.JxcvPQkzznbYAsCe92v8CkJvOTcUowKuv0dBCKNBJjA\"")
+        buildConfigField("String", "SUPABASE_URL", "\"https://pnqmvpmodoubprsrxrhx.supabase.co\"")
     }
 
     buildTypes {
@@ -38,6 +40,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -53,6 +56,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
 
     implementation(libs.androidx.navigation.compose)
+
     // Supabase Bill of Materials (BOM)
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.postgrest.kt)
@@ -60,10 +64,14 @@ dependencies {
 
     implementation(libs.androidx.compose.runtime)
 
-    // Ktor client for networking (Realtime needs a WebSocket-capable engine)
+    implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.android)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.client.logging)
+    implementation(libs.ktor.client.okhttp)
+    implementation(libs.ktor.client.websockets)
+    implementation(libs.slf4j.android)
 
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
@@ -74,8 +82,8 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
 
     // --- Coroutines ---
-    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.core)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

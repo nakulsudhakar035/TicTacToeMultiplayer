@@ -4,6 +4,7 @@ import com.nakuls.tictactoe.domain.model.Game
 import com.nakuls.tictactoe.domain.model.GameStatus
 import com.nakuls.tictactoe.domain.model.Player
 import com.nakuls.tictactoe.domain.model.PlayerStatus
+import com.nakuls.tictactoe.stratergy.RowColumnDiagonalStratergy
 
 fun main() {
 
@@ -19,20 +20,22 @@ class TicTacToe {
             status = PlayerStatus.Active,
             symbol = 'x',
             id = null,
-            score = 0
+            score = 0,
+            email = ""
         )
         val playerTwo = Player(
             name = "Two",
             status = PlayerStatus.Active,
             symbol = 'o',
             id = null,
-            score = 0
+            score = 0,
+            email = ""
         )
         val game = Game(
             id = 1,
             status = GameStatus.UnFilled,
             length = 3,
-            owner = playerOne,
+            owner = "playerOne",
             winner = null,
             moveCount = 0,
             players = listOf(playerOne, playerTwo),

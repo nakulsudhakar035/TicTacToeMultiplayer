@@ -5,5 +5,6 @@ data class Player
     var name: String,
     var status: PlayerStatus,
     var score: Int?,
-    var symbol: Char
+    var symbol: Char,
+    var email: String
 )
