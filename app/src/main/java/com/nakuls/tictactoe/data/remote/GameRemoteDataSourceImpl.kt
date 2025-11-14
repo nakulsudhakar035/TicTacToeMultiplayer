@@ -64,7 +64,7 @@ class GameRemoteDataSourceImpl(
             // Define the listener that triggers a full re-fetch on ANY change
             val changesFlow = channel.postgresChangeFlow<PostgresAction>(
                 schema = "public",
-                filter = { "schema=public,table=game" }
+                filter = { "schema=public,table=$TABLE_NAME" }
             )
 
 
