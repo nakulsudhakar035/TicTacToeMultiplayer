@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface GameRepository {
 
-    suspend fun getJoinableGamesStream(): Flow<List<Game>>
+    suspend fun getJoinableGamesStream(createrIDToExclude: Int): Flow<List<Game>>
 
-    fun createGame(email: String): Boolean
+    suspend fun createGame(createdBy: Int, length: Int, status: Int): Boolean
 }

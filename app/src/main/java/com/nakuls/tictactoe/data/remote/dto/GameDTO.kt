@@ -10,8 +10,6 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class GameDTO(
-    @SerialName("created_by")
-    val createdBy: Int,
     @SerialName("created_at")
     val createdAt: String?,
     @SerialName("edited_at")
@@ -19,13 +17,19 @@ data class GameDTO(
     @SerialName("id")
     val gameID: Int,
     val status: Int,
-    val length: Int
+    val length: Int,
+    @SerialName("created_by") val player: PlayerInfo
+)
+
+@Serializable
+data class PlayerInfo(
+    @SerialName("name") val name: String
 )
 
 fun GameDTO.toGame(): Game {
     return Game(
         id = this.gameID,
-        owner = ""+this.createdBy,
+        owner = this.player.name,
         status = GameStatus.entries[this.status],
         length = this.length,
         winner = null,

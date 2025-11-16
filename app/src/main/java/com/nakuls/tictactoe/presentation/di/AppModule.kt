@@ -1,5 +1,9 @@
 package com.nakuls.tictactoe.presentation.di
 
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
 import com.nakuls.tictactoe.data.local.UserProfileLocal
 import com.nakuls.tictactoe.data.local.UserProfileLocalDataSourceImpl
 import com.nakuls.tictactoe.data.remote.ApiConfig
@@ -17,21 +21,27 @@ import com.nakuls.tictactoe.presentation.screens.splash.SplashViewModel
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.plugins.websocket.WebSockets
+import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
-
+val Context.userPreferencesDataStore: DataStore<Preferences> by
+preferencesDataStore(name = "user_preferences")
 val appModule = module {
+
+    single<DataStore<Preferences>> {
+        androidContext().userPreferencesDataStore
+    }
 
     single { ApiConfig.httpClient }
 
     // --- ViewModels ---
     viewModel { SplashViewModel(userRepository = get()) }
     viewModel { ProfileViewModel(userRepository = get()) }
-    viewModel { HomeViewModel(gameRepository = get()) }
+    viewModel { HomeViewModel(
+        gameRepository = get(),
+        get()
+    ) }
     //viewModel { GameViewModel(/* add dependencies here */) }
 
     // --- Use Cases (from domain layer) ---
@@ -65,7 +75,7 @@ val appModule = module {
 
     single<UserProfileLocal> {
         UserProfileLocalDataSourceImpl(
-            context = get(),
+            dataStore = get(),
         )
     }
 

@@ -25,13 +25,13 @@ class UserRepositoryImpl(
             status = 0,
             email = email
         )
-        if (
-            remoteSource.createProfile(
-                profileCreationDTO = profileCreationDto
-            )
-        ){
+        val profileCreated = remoteSource.createProfile(
+            profileCreationDTO = profileCreationDto
+        )
+        if (profileCreated != null){
             localSource.createProfile(
                 UserProfile(
+                    profileCreated.id!!,
                     name,
                     email
                 )

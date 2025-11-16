@@ -8,5 +8,5 @@ interface GameAPI {
 
     suspend fun createGame(gameCreationDTO: GameCreationDTO): Boolean
 
-    suspend fun fetchJoinableGames(): Flow<List<Game>>
+    suspend fun fetchJoinableGames(currentUserId: Int): Flow<List<Game>>
 }

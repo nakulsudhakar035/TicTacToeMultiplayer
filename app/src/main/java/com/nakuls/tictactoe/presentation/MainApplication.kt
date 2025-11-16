@@ -2,6 +2,7 @@ package com.nakuls.tictactoe.presentation
 
 import android.app.Application
 import com.nakuls.tictactoe.BuildConfig
+import com.nakuls.tictactoe.data.local.dataStoreModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.GlobalContext.startKoin
@@ -20,7 +21,9 @@ class MainApplication : Application() {
         startKoin {
             androidLogger() // Koin logs
             androidContext(this@MainApplication) // Provide Android context
-            modules(appModule) // Your app's modules
+            modules(
+                appModule
+            )
             properties(mapOf("API_KEY" to BuildConfig.SUPABASE_API_KEY))
             properties(mapOf("AUTH_KEY" to BuildConfig.SUPABASE_AUTH_KEY))
             properties(mapOf("SUPABASE_URL" to BuildConfig.SUPABASE_URL))

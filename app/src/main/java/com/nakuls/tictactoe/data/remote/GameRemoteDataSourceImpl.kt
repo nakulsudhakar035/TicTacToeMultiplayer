@@ -5,19 +5,23 @@ import com.nakuls.tictactoe.data.remote.dto.GameDTO
 import com.nakuls.tictactoe.data.remote.dto.toGame
 import com.nakuls.tictactoe.domain.model.Game
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
+import io.ktor.client.call.body
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.isSuccess
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
@@ -25,17 +29,36 @@ class GameRemoteDataSourceImpl(
     private val supabaseClient: SupabaseClient
 ): GameAPI {
 
-    private val TABLE_NAME = "game"
+    private val TABLENAME = "game"
 
     override suspend fun createGame(gameCreationDTO: GameCreationDTO): Boolean {
-        TODO("Not yet implemented")
+        return try {
+            // Attempt the RPC call
+            supabaseClient.postgrest.rpc(
+                function = "create_game_and_player",
+                parameters = gameCreationDTO
+            )
+            true
+        } catch (e: RestException) {
+            // Handle database-related errors (constraints, RLS, etc.)
+            println("Game creation failed due to Postgrest error: ${e.message}")
+            false // Return false to indicate failure
+        } catch (e: Exception) {
+            // Handle network or other unexpected errors (e.g., decoding failure)
+            println("An unexpected error occurred during game creation: ${e.message}")
+            false
+        }
     }
 
-    override suspend fun fetchJoinableGames(): Flow<List<Game>> = flow {
+    override suspend fun fetchJoinableGames(currentUserId: Int): Flow<List<Game>> = flow {
 
-        val initialGameDTOs = supabaseClient.postgrest[TABLE_NAME]
-            .select(columns = Columns.list("id", "status", "length", "created_by", "created_at", "edited_at")) {
+        val columnsWithName = Columns.list("id", "status",
+            "length", "created_at", "edited_at",
+            "created_by!inner(name)")
+        val initialGameDTOs = supabaseClient.postgrest[TABLENAME]
+            .select(columns = columnsWithName) {
                 filter { eq("status", 0) }
+                filter { neq("created_by", currentUserId) }
             }
             .decodeList<GameDTO>()
 
@@ -64,7 +87,7 @@ class GameRemoteDataSourceImpl(
             // Define the listener that triggers a full re-fetch on ANY change
             val changesFlow = channel.postgresChangeFlow<PostgresAction>(
                 schema = "public",
-                filter = { "schema=public,table=$TABLE_NAME" }
+                filter = { "schema=public,table=$TABLENAME" }
             )
 
 
@@ -74,8 +97,8 @@ class GameRemoteDataSourceImpl(
             changesFlow
                 .onEach {
                     // Re-fetch the ENTIRE list whenever a change notification is received
-                    val updatedGameDTOs = supabaseClient.postgrest[TABLE_NAME]
-                        .select(columns = Columns.list("id", "status", "length", "created_by", "created_at", "edited_at")) {
+                    val updatedGameDTOs = supabaseClient.postgrest[TABLENAME]
+                        .select(columns = columnsWithName) {
                             filter { eq("status", 0) }
                         }
                         .decodeList<GameDTO>()

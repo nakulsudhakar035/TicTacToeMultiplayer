@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
@@ -28,6 +29,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -37,12 +40,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,6 +71,66 @@ fun HomeScreen(
     viewModel: HomeViewModel = koinViewModel()
 ) {
     val games by viewModel.joinableGames.collectAsState()
+    // 1. State to control the visibility of the Bottom Sheet
+    var showBottomSheet by rememberSaveable { mutableStateOf(false) }
+    // 2. State to hold the user input for game length
+    var gameLengthInput by rememberSaveable { mutableStateOf("3") }
+    val isLengthValid = remember(gameLengthInput) {
+        gameLengthInput.toIntOrNull() != null && gameLengthInput.toIntOrNull()!! >= 2
+    }
+
+    // 1. State for the search query
+    var searchQuery by rememberSaveable { mutableStateOf("") } // Store the query
+
+    // 2. Filter the list based on the search query
+    val filteredGames = remember(games, searchQuery) {
+        if (searchQuery.isBlank()) {
+            games // Show all games if search is empty
+        } else {
+            games.filter { game ->
+                val query = searchQuery.trim().lowercase()
+
+                // Add your filtering criteria here:
+                val matchesPlayer = game.owner.lowercase().contains(query)
+                val matchesGameId = game.id.toString().contains(query)
+                // Assuming email is available in your DTO, add:
+                // val matchesEmail = game.player.email.lowercase().contains(query)
+
+                matchesPlayer || matchesGameId
+            }
+        }
+    }
+
+    // Use ModalBottomSheet for the slide-up window
+    if (showBottomSheet) {
+        // Material 3 Modal Bottom Sheet
+        ModalBottomSheet(
+            onDismissRequest = {
+                showBottomSheet = false // Dismiss when swiped down or tapped outside
+            },
+            // Optional: Customize container/content
+            containerColor = BackgroundLight,
+        ) {
+            // Content of the Bottom Sheet
+            BottomSheetContent(
+                gameLengthInput = gameLengthInput,
+                onLengthChange = { gameLengthInput = it },
+                isInputError = !isLengthValid,
+                onCreateGame = {
+                    // 1. Validate input and convert to Int
+                    val length = gameLengthInput.toIntOrNull()
+                    if (isLengthValid) {
+                        // 2. Call ViewModel action
+                        viewModel.createGame(length!!)
+                        // 3. Close the sheet
+                        showBottomSheet = false
+                    }
+                },
+                onDismiss = { showBottomSheet = false }
+            )
+        }
+    }
+
     AppTheme {
         Scaffold(
             // Use background color that provides good contrast to the cards
@@ -80,7 +145,7 @@ fun HomeScreen(
                 ) {
                     NewGameButton(
                         onClick = {
-
+                            showBottomSheet = true
                     })
                 }
             }
@@ -100,16 +165,16 @@ fun HomeScreen(
 
                 // Top section: Search Bar and List
                 GameSearchBar(
-                    searchQuery = "",
-                    onQueryChanged = {
-
+                    searchQuery = searchQuery,
+                    onQueryChanged = { newQuery ->
+                        searchQuery = newQuery // Update the state when text changes
                     }
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 AwaitingGamesList(
-                    games = games,
+                    games = filteredGames,
                     isLoading = false,
                     error = null,
                     onJoinGame = {
@@ -248,7 +313,7 @@ fun GameListItem(game: Game, onJoinGame: (Int?) -> Unit) {
         ) {
             // Player Icon & Info
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Duolingo-style avatar/icon
+                // avatar/icon
                 Box(
                     modifier = Modifier
                         .size(48.dp)
@@ -257,7 +322,7 @@ fun GameListItem(game: Game, onJoinGame: (Int?) -> Unit) {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = game.owner,
+                        text = game.owner[0].toString(),
                         fontSize = 20.sp,
                         color = Color.White
                     )
@@ -271,22 +336,27 @@ fun GameListItem(game: Game, onJoinGame: (Int?) -> Unit) {
                         color = Color.Black
                     )
                     Text(
-                        text = "Game ID: ${game.id} | Created by: ${game.owner}",
+                        text = "Game ID: ${game.id} | Of size: ${game.length} * ${game.length}",
                         fontSize = 12.sp,
                         color = Color.Gray
                     )
                 }
             }
 
-            // Action Button
-            Button(
-                onClick = { onJoinGame(game.id) },
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = HellesGreen),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.CenterEnd
             ) {
-                Text("JOIN", fontWeight = FontWeight.ExtraBold)
+                // Action Button
+                Button(
+                    onClick = { onJoinGame(game.id) },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = HellesGreen),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text("JOIN", fontWeight = FontWeight.ExtraBold)
+                }
             }
         }
     }
@@ -313,6 +383,85 @@ fun NewGameButton(onClick: () -> Unit) {
                 color = Color.White
             )
         }
+    }
+}
+
+// Helper Composable for the Bottom Sheet Content
+@Composable
+fun BottomSheetContent(
+    gameLengthInput: String,
+    onLengthChange: (String) -> Unit,
+    isInputError: Boolean,
+    onCreateGame: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // --- Title ---
+        Text(
+            text = "Configure New Game",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
+        // --- Input Field ---
+        OutlinedTextField(
+            value = gameLengthInput,
+            onValueChange = {
+                // Basic numeric filtering
+                if (it.length <= 2 && it.all { char -> char.isDigit() }) {
+                    onLengthChange(it)
+                }
+            },
+            label = { Text("Game Length (e.g., 3 for 3x3)") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+            singleLine = true,
+            isError = isInputError, // Toggles red border and error color
+
+            // Optional: Provide a helper text displaying the error message
+            supportingText = {
+                if (isInputError) {
+                    Text(
+                        text = "Must be a number greater than or equal to 2.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        )
+        if (!isInputError) {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+        // --- Buttons ---
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Dismiss Button
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f).padding(end = 8.dp)
+            ) {
+                Text("Cancel")
+            }
+
+            // Create Game Button
+            Button(
+                onClick = onCreateGame,
+                enabled = !isInputError, // Enable only if valid number
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("CREATE GAME")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp)) // Padding below buttons
     }
 }
 
