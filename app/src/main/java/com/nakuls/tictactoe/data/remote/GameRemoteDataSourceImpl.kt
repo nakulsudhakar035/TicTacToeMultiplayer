@@ -1,21 +1,21 @@
 package com.nakuls.tictactoe.data.remote
 
+import android.util.Log
 import com.nakuls.tictactoe.data.remote.dto.GameCreationDTO
 import com.nakuls.tictactoe.data.remote.dto.GameDTO
+import com.nakuls.tictactoe.data.remote.dto.GamePlayerDTO
 import com.nakuls.tictactoe.data.remote.dto.toGame
 import com.nakuls.tictactoe.domain.model.Game
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.query.Returning
 import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
-import io.ktor.client.call.body
-import io.ktor.client.statement.HttpResponse
-import io.ktor.http.isSuccess
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -127,5 +127,23 @@ class GameRemoteDataSourceImpl(
         // This is now safe because the subscribe() call is inside the `realtimeFlow`'s setup
         emitAll(realtimeFlow)
 
+    }
+
+    override suspend fun joinGame(gamePlayerDTO: GamePlayerDTO): Boolean {
+        return try {
+            val result = supabaseClient.postgrest["game_player"].insert(
+                value = gamePlayerDTO,
+                request = {
+                    // We set the returning preference inside the lambda
+                    Returning.Minimal
+                }
+            )
+            Log.i("joinGame",result.data)
+            true
+        } catch (e: Exception) {
+            // Handle RLS errors, constraint violations, or network issues
+            println("Error inserting game player: ${e.message}")
+            false
+        }
     }
 }

@@ -177,8 +177,8 @@ fun HomeScreen(
                     games = filteredGames,
                     isLoading = false,
                     error = null,
-                    onJoinGame = {
-
+                    onJoinGame = { gameId ->
+                        viewModel.joinGame(gameId!!)
                     }
                 )
             }

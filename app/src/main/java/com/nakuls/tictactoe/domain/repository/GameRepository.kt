@@ -8,4 +8,6 @@ interface GameRepository {
     suspend fun getJoinableGamesStream(createrIDToExclude: Int): Flow<List<Game>>
 
     suspend fun createGame(createdBy: Int, length: Int, status: Int): Boolean
+
+    suspend fun joinGame(gameId: Int, userID: Int): Boolean
 }

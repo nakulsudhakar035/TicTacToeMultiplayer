@@ -50,9 +50,7 @@ val appModule = module {
 
     single<UserProfileAPI> {
         UserProfileRemoteDataSourceImpl(
-            client = get(),
-            auth_key = getProperty("AUTH_KEY"),
-            apiKey = getProperty("API_KEY")
+            supabaseClient = get()
         )
     }
 

@@ -63,4 +63,22 @@ class HomeViewModel(
             }
         }
     }
+
+    fun joinGame(gameID: Int){
+
+        viewModelScope.launch {
+            val userID = dataStore.data
+                .map { preferences ->
+                    preferences[Constants.USERID]
+                }
+                .firstOrNull()
+
+            if(userID != null) {
+                gameRepository.joinGame(
+                    gameID,
+                    userID
+                )
+            }
+        }
+    }
 }
