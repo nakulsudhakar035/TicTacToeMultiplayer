@@ -37,6 +37,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -83,20 +84,22 @@ fun HomeScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") } // Store the query
 
     // 2. Filter the list based on the search query
-    val filteredGames = remember(games, searchQuery) {
-        if (searchQuery.isBlank()) {
-            games // Show all games if search is empty
-        } else {
-            games.filter { game ->
-                val query = searchQuery.trim().lowercase()
+    val filteredGames= remember(games, searchQuery) {
+        derivedStateOf {
+            if (searchQuery.isBlank()) {
+                games // Show all games if search is empty
+            } else {
+                games.filter { game ->
+                    val query = searchQuery.trim().lowercase()
 
-                // Add your filtering criteria here:
-                val matchesPlayer = game.owner.lowercase().contains(query)
-                val matchesGameId = game.id.toString().contains(query)
-                // Assuming email is available in your DTO, add:
-                // val matchesEmail = game.player.email.lowercase().contains(query)
+                    // Add your filtering criteria here:
+                    val matchesPlayer = game.owner.lowercase().contains(query)
+                    val matchesGameId = game.id.toString().contains(query)
+                    // Assuming email is available in your DTO, add:
+                    // val matchesEmail = game.player.email.lowercase().contains(query)
 
-                matchesPlayer || matchesGameId
+                    matchesPlayer || matchesGameId
+                }
             }
         }
     }
@@ -174,7 +177,7 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 AwaitingGamesList(
-                    games = filteredGames,
+                    games = filteredGames.value,
                     isLoading = false,
                     error = null,
                     onJoinGame = { gameId ->
