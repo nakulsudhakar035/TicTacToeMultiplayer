@@ -7,9 +7,12 @@ import kotlinx.coroutines.flow.Flow
 
 interface GameAPI {
 
-    suspend fun createGame(gameCreationDTO: GameCreationDTO): Boolean
+    suspend fun createGame(gameCreationDTO: GameCreationDTO): Game?
 
     suspend fun joinGame(gamePlayerDTO: GamePlayerDTO): Boolean
 
     suspend fun fetchJoinableGames(currentUserId: Int): Flow<List<Game>>
+
+    suspend fun startListeningForGameJoins(gameId: Int): Flow<Unit>
+
 }

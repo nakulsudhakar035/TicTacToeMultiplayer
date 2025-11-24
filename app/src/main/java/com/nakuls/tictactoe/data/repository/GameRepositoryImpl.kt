@@ -15,13 +15,17 @@ class GameRepositoryImpl(
         return remoteSource.fetchJoinableGames(createrIDToExclude)
     }
 
-    override suspend fun createGame(createdBy: Int, length: Int, status: Int): Boolean {
+    override suspend fun createGame(createdBy: Int, length: Int, status: Int): Game? {
         return remoteSource.createGame(GameCreationDTO(createdBy,length,status))
 
     }
 
     override suspend fun joinGame(gameId: Int, userID: Int): Boolean {
         return remoteSource.joinGame(GamePlayerDTO(gameId,userID))
+    }
+
+    override suspend fun startListeningForGameJoins(gameId: Int): Flow<Unit> {
+        return remoteSource.startListeningForGameJoins(gameId)
     }
 
 }

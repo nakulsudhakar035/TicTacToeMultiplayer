@@ -15,6 +15,7 @@ import com.nakuls.tictactoe.data.repository.GameRepositoryImpl
 import com.nakuls.tictactoe.data.repository.UserRepositoryImpl
 import com.nakuls.tictactoe.domain.repository.GameRepository
 import com.nakuls.tictactoe.domain.repository.UserRepository
+import com.nakuls.tictactoe.presentation.screens.game.GameViewModel
 import com.nakuls.tictactoe.presentation.screens.home.HomeViewModel
 import com.nakuls.tictactoe.presentation.screens.profile.ProfileViewModel
 import com.nakuls.tictactoe.presentation.screens.splash.SplashViewModel
@@ -42,7 +43,10 @@ val appModule = module {
         gameRepository = get(),
         get()
     ) }
-    //viewModel { GameViewModel(/* add dependencies here */) }
+    viewModel { GameViewModel(
+        gameRepository = get(),
+        get()
+    ) }
 
     // --- Use Cases (from domain layer) ---
     // factory { GetUserProfileUseCase(get()) }

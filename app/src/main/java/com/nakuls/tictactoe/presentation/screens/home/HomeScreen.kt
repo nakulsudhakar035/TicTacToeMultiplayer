@@ -28,6 +28,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -36,6 +37,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -52,6 +54,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.nakuls.tictactoe.stratergy.RowColumnDiagonalStratergy
@@ -64,6 +67,7 @@ import kotlinx.coroutines.runBlocking
 import org.koin.androidx.compose.koinViewModel
 import com.nakuls.tictactoe.domain.model.Game
 import com.nakuls.tictactoe.domain.model.GameStatus
+import com.nakuls.tictactoe.presentation.screens.profile.ProfileUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,6 +75,7 @@ fun HomeScreen(
     navController: NavController,
     viewModel: HomeViewModel = koinViewModel()
 ) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val games by viewModel.joinableGames.collectAsState()
     // 1. State to control the visibility of the Bottom Sheet
     var showBottomSheet by rememberSaveable { mutableStateOf(false) }
@@ -79,6 +84,7 @@ fun HomeScreen(
     val isLengthValid = remember(gameLengthInput) {
         gameLengthInput.toIntOrNull() != null && gameLengthInput.toIntOrNull()!! >= 2
     }
+    val hasActiveGames by viewModel.hasActiveGames.collectAsState()
 
     // 1. State for the search query
     var searchQuery by rememberSaveable { mutableStateOf("") } // Store the query
@@ -86,7 +92,7 @@ fun HomeScreen(
     // 2. Filter the list based on the search query
     val filteredGames= remember(games, searchQuery) {
         derivedStateOf {
-            if (searchQuery.isBlank()) {
+            val filteredList =if (searchQuery.isBlank()) {
                 games // Show all games if search is empty
             } else {
                 games.filter { game ->
@@ -100,6 +106,21 @@ fun HomeScreen(
 
                     matchesPlayer || matchesGameId
                 }
+            }
+            filteredList.sortedByDescending { it.id }
+        }
+    }
+
+    val navEvents = viewModel.navigationEvents.collectAsStateWithLifecycle(null)
+
+    LaunchedEffect(navEvents.value) {
+        when (val evt = navEvents.value) {
+            is HomeNavigationEvent.NavigateToGame -> {
+                navController.navigate("game_screen/${evt.gameId}")
+            }
+
+            null -> {
+
             }
         }
     }
@@ -147,6 +168,7 @@ fun HomeScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     NewGameButton(
+                        isEnabled = !hasActiveGames,
                         onClick = {
                             showBottomSheet = true
                     })
@@ -159,7 +181,7 @@ fun HomeScreen(
                     .padding(paddingValues)
             ) {
                 Text(
-                    text = "Awaiting Matches",
+                    text = "Make a move",
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black.copy(alpha = 0.8f),
@@ -176,32 +198,22 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                AwaitingGamesList(
-                    games = filteredGames.value,
-                    isLoading = false,
-                    error = null,
-                    onJoinGame = { gameId ->
-                        viewModel.joinGame(gameId!!)
+                if(uiState is HomeUiState.LoadingGames){
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = HellesGreen)
                     }
-                )
+                } else {
+                    AwaitingGamesList(
+                        games = filteredGames.value,
+                        onJoinGame = { gameId ->
+                            viewModel.joinGame(gameId!!)
+                        }
+                    )
+                }
             }
         }
     }
 }
-
-data class HomeScreenState(
-    val awaitingGames: List<Game> = emptyList(),
-    val searchQuery: String = "",
-    val isLoading: Boolean = false,
-    val error: String? = null
-)
-
-sealed class HomeScreenEvent {
-    data class SearchQueryChanged(val query: String) : HomeScreenEvent()
-    data class JoinGameClicked(val gameId: String) : HomeScreenEvent()
-    object NewGameClicked : HomeScreenEvent()
-}
-
 
 /**
  * --------------------------------------------------------------------------
@@ -265,36 +277,15 @@ fun GameSearchBar(
 @Composable
 fun AwaitingGamesList(
     games: List<Game>,
-    isLoading: Boolean,
-    error: String?,
     onJoinGame: (Int?) -> Unit
 ) {
-    when {
-        isLoading -> {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = HellesGreen)
-            }
-        }
-        error != null -> {
-            Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                Text("Error loading games: $error", color = MaterialTheme.colorScheme.error)
-            }
-        }
-        games.isEmpty() -> {
-            Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                Text("No games currently awaiting a second player. Start a new one!", color = Color.Gray)
-            }
-        }
-        else -> {
-            LazyColumn(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                items(games.size) { game ->
-                    GameListItem(game = games[game], onJoinGame = onJoinGame)
-                }
-            }
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        items(games.size) { game ->
+            GameListItem(game = games[game], onJoinGame = onJoinGame)
         }
     }
 }
@@ -366,9 +357,10 @@ fun GameListItem(game: Game, onJoinGame: (Int?) -> Unit) {
 }
 
 @Composable
-fun NewGameButton(onClick: () -> Unit) {
+fun NewGameButton(isEnabled : Boolean, onClick: () -> Unit) {
     Button(
         onClick = onClick,
+        enabled = isEnabled,
         modifier = Modifier
             .fillMaxWidth(0.9f)
             .height(60.dp),
@@ -423,7 +415,9 @@ fun BottomSheetContent(
             },
             label = { Text("Game Length (e.g., 3 for 3x3)") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp),
             singleLine = true,
             isError = isInputError, // Toggles red border and error color
 
@@ -449,7 +443,9 @@ fun BottomSheetContent(
             // Dismiss Button
             OutlinedButton(
                 onClick = onDismiss,
-                modifier = Modifier.weight(1f).padding(end = 8.dp)
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
             ) {
                 Text("Cancel")
             }
@@ -466,75 +462,4 @@ fun BottomSheetContent(
 
         Spacer(modifier = Modifier.height(16.dp)) // Padding below buttons
     }
-}
-
-
-/**
- * --------------------------------------------------------------------------
- * 3. PREVIEW FUNCTION
- * --------------------------------------------------------------------------
- */
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewGameHomeScreen() {
-    val mockGames = listOf(
-        Game(
-            1, GameStatus.UnFilled, 3, "Player 1", null,
-            moveCount = 0,
-            players = null,
-            charArray = charArrayOf(),
-            winDetectionStratergy = RowColumnDiagonalStratergy()
-        ),
-        Game(2, GameStatus.UnFilled, 3, "Player 2", null,
-            moveCount = 0,
-            players = null,
-            charArray = charArrayOf(),
-            winDetectionStratergy = RowColumnDiagonalStratergy()),
-        Game(3, GameStatus.Filled, 4, "Player 3", null,
-            moveCount = 0,
-            players = null,
-            charArray = charArrayOf(),
-            winDetectionStratergy = RowColumnDiagonalStratergy()),
-        Game(4, GameStatus.UnFilled, 5, "Player 4", null,
-            moveCount = 0,
-            players = null,
-            charArray = charArrayOf(),
-            winDetectionStratergy = RowColumnDiagonalStratergy()),
-    )
-
-    // Mock state management for preview
-    var state by remember {
-        mutableStateOf(
-            HomeScreenState(
-                awaitingGames = mockGames,
-                isLoading = false
-            )
-        )
-    }
-
-    // Mock event handler
-    val onEvent: (HomeScreenEvent) -> Unit = { event ->
-        when (event) {
-            is HomeScreenEvent.SearchQueryChanged -> {
-                state = state.copy(searchQuery = event.query)
-            }
-            is HomeScreenEvent.JoinGameClicked -> {
-                println("Joined game: ${event.gameId}")
-            }
-            is HomeScreenEvent.NewGameClicked -> {
-                // Simulate loading for the button click
-                runBlocking {
-                    state = state.copy(isLoading = true)
-                    delay(500) // Simulate delay
-                    state = state.copy(isLoading = false)
-                    println("Starting new game...")
-                }
-            }
-        }
-    }
-
-    HomeScreen(
-        navController = rememberNavController()
-    )
 }
