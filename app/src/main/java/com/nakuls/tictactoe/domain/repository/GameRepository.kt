@@ -12,4 +12,6 @@ interface GameRepository {
     suspend fun joinGame(gameId: Int, userID: Int): Boolean
 
     suspend fun startListeningForGameJoins(gameId: Int): Flow<Unit>
+
+    suspend fun makeMove(index: Int, playerID: Int): Boolean
 }

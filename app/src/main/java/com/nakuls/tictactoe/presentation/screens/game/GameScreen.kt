@@ -204,7 +204,7 @@ fun Game(
 
                         // In real app, call ViewModel:
                         onCellClicked(index)*/
-                        //viewModel.game.value.makeMove(index)
+                        viewModel.makeMove(index)
                     }
                 }
             )

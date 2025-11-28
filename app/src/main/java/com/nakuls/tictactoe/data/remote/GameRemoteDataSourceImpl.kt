@@ -5,6 +5,7 @@ import com.nakuls.tictactoe.data.remote.dto.GameCreationDTO
 import com.nakuls.tictactoe.data.remote.dto.GameDTO
 import com.nakuls.tictactoe.data.remote.dto.GameJoinDTO
 import com.nakuls.tictactoe.data.remote.dto.GamePlayerDTO
+import com.nakuls.tictactoe.data.remote.dto.MoveDTO
 import com.nakuls.tictactoe.data.remote.dto.toGame
 import com.nakuls.tictactoe.domain.model.Game
 import io.github.jan.supabase.SupabaseClient
@@ -186,6 +187,24 @@ class GameRemoteDataSourceImpl(
                     channel.unsubscribe()
                 }
             }
+        }
+    }
+
+    override suspend fun makeMove(moveDTO: MoveDTO): Boolean {
+        return try {
+            val result = supabaseClient.postgrest["move"].insert(
+                value = moveDTO,
+                request = {
+                    // We set the returning preference inside the lambda
+                    Returning.Minimal
+                }
+            )
+            Log.i("make move",result.data)
+            true
+        } catch (e: Exception) {
+            // Handle RLS errors, constraint violations, or network issues
+            println("Error inserting move: ${e.message}")
+            false
         }
     }
 }

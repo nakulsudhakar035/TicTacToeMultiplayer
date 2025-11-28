@@ -3,6 +3,7 @@ package com.nakuls.tictactoe.data.repository
 import com.nakuls.tictactoe.data.remote.GameAPI
 import com.nakuls.tictactoe.data.remote.dto.GameCreationDTO
 import com.nakuls.tictactoe.data.remote.dto.GamePlayerDTO
+import com.nakuls.tictactoe.data.remote.dto.MoveDTO
 import com.nakuls.tictactoe.domain.model.Game
 import com.nakuls.tictactoe.domain.repository.GameRepository
 import kotlinx.coroutines.flow.Flow
@@ -26,6 +27,10 @@ class GameRepositoryImpl(
 
     override suspend fun startListeningForGameJoins(gameId: Int): Flow<Unit> {
         return remoteSource.startListeningForGameJoins(gameId)
+    }
+
+    override suspend fun makeMove(index: Int, playerID: Int): Boolean {
+        return remoteSource.makeMove(MoveDTO(index, playerID))
     }
 
 }

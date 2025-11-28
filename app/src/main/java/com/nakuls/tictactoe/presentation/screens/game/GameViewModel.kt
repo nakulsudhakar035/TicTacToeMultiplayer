@@ -6,10 +6,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nakuls.tictactoe.domain.model.Game
 import com.nakuls.tictactoe.domain.repository.GameRepository
+import com.nakuls.tictactoe.domain.utils.Constants
 import com.nakuls.tictactoe.presentation.screens.home.HomeUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 sealed class GameUiState {
@@ -49,6 +52,21 @@ class GameViewModel(
         }
         gameRepository.toString()
         dataStore.toString()
+    }
+
+    fun makeMove(index: Int){
+        viewModelScope.launch {
+            val createdBy = dataStore.data
+                .map { preferences ->
+                    preferences[Constants.USERID]
+                }
+                .firstOrNull()
+            if (createdBy != null) {
+                if (gameRepository.makeMove(index, createdBy)) {
+                    _game.value!!.charArray[index] = 'x'
+                }
+            }
+        }
     }
 
 }
