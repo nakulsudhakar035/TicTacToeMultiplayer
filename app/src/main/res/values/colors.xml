@@ -7,4 +7,8 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="PlayerOCardColor">#FFC7E8F3</color>
+    <color name="PlayerXCardColor">#FFE8F3C7</color>
+    <color name="DarkNavy">#FF1A2A44</color>
+    <color name="TextLight">#FFF0F0F0</color>
 </resources>

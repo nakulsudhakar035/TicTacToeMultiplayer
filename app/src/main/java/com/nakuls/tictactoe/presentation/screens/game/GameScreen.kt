@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -57,11 +58,6 @@ import com.nakuls.tictactoe.presentation.ui.theme.BackgroundLight
 import org.koin.androidx.compose.koinViewModel
 import kotlin.collections.List
 
-// Define some example colors and resources (you'll need to adapt these)
-val PlayerOCardColor = Color(0xFFC7E8F3) // Light blue for O's score card
-val PlayerXCardColor = Color(0xFFE8F3C7) // Light green for X's score card
-val DarkNavy = Color(0xFF1A2A44) // A dark background color (for cards etc.)
-val TextLight = Color(0xFFF0F0F0) // Light text color
 
 val R_drawable_o_mark = R.drawable.o
 val R_drawable_x_mark = R.drawable.x
@@ -108,13 +104,13 @@ fun GameScreen(
                             Icon(
                                 imageVector = Icons.Filled.Refresh,
                                 contentDescription = "Reset Game",
-                                tint = DarkNavy,
+                                tint = colorResource(R.color.DarkNavy),
                                 modifier = Modifier.size(24.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "Reset Game",
-                                color = DarkNavy,
+                                color = colorResource(R.color.DarkNavy),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -170,13 +166,13 @@ fun Game(
                     playerMark = Mark.O,
                     score = 0,
                     isCurrentPlayer = currentPlayerTurn == Mark.O,
-                    cardColor = PlayerOCardColor // Light blue
+                    cardColor = colorResource(R.color.PlayerOCardColor) // Light blue
                 )
                 ScoreCard(
                     playerMark = Mark.X,
                     score = 0,
                     isCurrentPlayer = currentPlayerTurn == Mark.X,
-                    cardColor = PlayerXCardColor // Light green
+                    cardColor = colorResource(R.color.PlayerXCardColor) // Light green
                 )
             }
 
@@ -185,7 +181,7 @@ fun Game(
                 text = if (currentPlayerTurn == Mark.X) "Your Turn" else "Opponent's Turn", // Dynamic turn display
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = TextLight,
+                color = colorResource(R.color.TextLight),
                 modifier = Modifier.padding(vertical = 16.dp)
             )
 
@@ -228,7 +224,8 @@ fun ScoreCard(
             .clip(RoundedCornerShape(12.dp))
             .border(
                 width = if (isCurrentPlayer) 3.dp else 1.dp,
-                color = if (isCurrentPlayer) TextLight else Color.Transparent, // Highlight current player
+                color = if (isCurrentPlayer) colorResource(R.color.TextLight)
+                else Color.Transparent, // Highlight current player
                 shape = RoundedCornerShape(12.dp)
             ),
         colors = CardDefaults.cardColors(containerColor = cardColor)
@@ -257,14 +254,14 @@ fun ScoreCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = if (playerMark == Mark.O) "You :" else "Bot :", // Dynamic player name
-                    color = DarkNavy,
+                    color = colorResource(R.color.DarkNavy),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Medium
                 )
             }
             Text(
                 text = score.toString(),
-                color = DarkNavy,
+                color = colorResource(R.color.DarkNavy),
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -283,8 +280,8 @@ fun TicTacToeGrid(
             .fillMaxWidth()
             .aspectRatio(1f) // Make the grid square
             .clip(RoundedCornerShape(16.dp)) // Rounded corners for the entire grid area
-            .background(DarkNavy) // Dark background for the grid itself
-            .border(2.dp, TextLight.copy(alpha = 0.5f), RoundedCornerShape(16.dp)) // Subtle border
+            .background(colorResource(R.color.DarkNavy)) // Dark background for the grid itself
+            .border(2.dp, colorResource(R.color.TextLight).copy(alpha = 0.5f), RoundedCornerShape(16.dp)) // Subtle border
             .padding(8.dp), // Inner padding
         contentAlignment = Alignment.Center
     ) {
