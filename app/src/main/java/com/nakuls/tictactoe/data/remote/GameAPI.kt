@@ -17,4 +17,6 @@ interface GameAPI {
     suspend fun startListeningForGameJoins(gameId: Int): Flow<Unit>
 
     suspend fun makeMove(moveDTO: MoveDTO): Boolean
+
+    suspend fun startListeningForMovesInGame(gamePlayerId: Int): Flow<Unit>
 }

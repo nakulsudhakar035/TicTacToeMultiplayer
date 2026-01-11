@@ -34,6 +34,7 @@ class GameRemoteDataSourceImpl(
 
     private val TABLEGAME = "game"
     private val TABLEGAMEPLAYER = "game_player"
+    private val TABLEMOVES = "moves"
 
     override suspend fun createGame(gameCreationDTO: GameCreationDTO): Game? {
         try {
@@ -205,6 +206,38 @@ class GameRemoteDataSourceImpl(
             // Handle RLS errors, constraint violations, or network issues
             println("Error inserting move: ${e.message}")
             false
+        }
+    }
+
+    override suspend fun startListeningForMovesInGame(gamePlayerId: Int): Flow<Unit> {
+
+        return callbackFlow {
+            val channel = supabaseClient.realtime.channel("move_completed_$gamePlayerId")
+
+            val flow = channel.postgresChangeFlow<PostgresAction>(
+                schema = "public",
+                filter = { "table=$TABLEMOVES, game_player_id=eq.$gamePlayerId" }
+            )
+
+            // Collect DB events
+            val job = launch {
+                flow.collect { action ->
+                    if (action is PostgresAction.Insert) {
+                        trySend(Unit)
+                    }
+                }
+            }
+
+            // Subscribe to the channel
+            channel.subscribe()
+
+            // Cleanup
+            awaitClose { //TODO remove this cancel part
+                job.cancel()
+                launch {
+                    channel.unsubscribe()
+                }
+            }
         }
     }
 }
