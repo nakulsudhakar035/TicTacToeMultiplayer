@@ -1,20 +1,20 @@
 package com.nakuls.tictactoe.domain.model
 
-import com.nakuls.tictactoe.WinDetectionStratergy
+import com.nakuls.tictactoe.WinDetectionStrategy
 
-class Game(
-    var id: Int?,
-    var status: GameStatus,
-    var length: Int,
-    var owner: String,
-    var winner: String?,
-    var moveCount: Int,
+data class Game(
+    val id: Int?,
+    val status: GameStatus,
+    val length: Int,
+    val owner: String,
+    val winner: String?,
+    val moveCount: Int,
     val players: List<Player>?,
-    var charArray: CharArray,
-    val winDetectionStratergy: WinDetectionStratergy
+    val charArray: CharArray,
+    val winDetectionStratergy: WinDetectionStrategy
 ){
     fun createGame(){
-       charArray = CharArray(length*length)
+       //charArray = CharArray(length*length)
     }
 
     fun fetchJoinnableGames(){
@@ -27,16 +27,16 @@ class Game(
 
     fun makeMove(move: Move){
 
-        charArray[move.index] = move.player.symbol
+        charArray[move.index] = move.player!!.symbol
         displayMoves()
         if (moveCount > length && winDetectionStratergy.checkIfMatchPoint(
-            move.player,
+            move.player!!,
             move,
             this)) {
-            println("${move.player.name} wins")
+            println("${move.player!!.name} wins")
             return
         }
-        this.moveCount++
+        //this.moveCount++
         requestMove()
     }
 
@@ -71,4 +71,6 @@ class Game(
             index++
         }
     }
+
+
 }

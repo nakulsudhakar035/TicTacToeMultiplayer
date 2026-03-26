@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">TicTacToe</string>
+    <string name="please_retry">This move could not be verified</string>
 </resources>

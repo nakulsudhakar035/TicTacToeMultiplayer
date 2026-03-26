@@ -1,9 +1,14 @@
 package com.nakuls.tictactoe.presentation.screens.splash
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nakuls.tictactoe.domain.repository.UserRepository
+import com.nakuls.tictactoe.domain.utils.Constants
 import com.nakuls.tictactoe.presentation.navigation.Screen
+import com.nakuls.tictactoe.presentation.screens.game.GameUiState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +20,8 @@ sealed class SplashState {
 }
 
 class SplashViewModel(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val dataStore: DataStore<Preferences>
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<SplashState>(SplashState.Loading)
@@ -37,6 +43,14 @@ class SplashViewModel(
             val destination = if (username.isNullOrBlank()) {
                 Screen.Profile // No user found -> Go to Profile Creation
             } else {
+                viewModelScope.launch {
+                    dataStore.edit { preferences ->
+                        // Clear only game-related keys, keep user/auth keys
+                        preferences.remove(Constants.GAMEPLAYERID)
+                        preferences.remove(Constants.ISGAMEOWNER)
+                        preferences.remove(Constants.HASACTIVEGAMES)
+                    }
+                }
                 Screen.Home // User found -> Go to Home/Lobby Screen
             }
 

@@ -4,10 +4,13 @@ import android.util.Log
 import com.nakuls.tictactoe.data.remote.dto.GameCreationDTO
 import com.nakuls.tictactoe.data.remote.dto.GameDTO
 import com.nakuls.tictactoe.data.remote.dto.GameJoinDTO
+import com.nakuls.tictactoe.data.remote.dto.GameJoiningPlayerDTO
 import com.nakuls.tictactoe.data.remote.dto.GamePlayerDTO
 import com.nakuls.tictactoe.data.remote.dto.MoveDTO
 import com.nakuls.tictactoe.data.remote.dto.toGame
+import com.nakuls.tictactoe.data.remote.dto.toGamePlayer
 import com.nakuls.tictactoe.domain.model.Game
+import com.nakuls.tictactoe.domain.model.GamePlayer
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.postgrest.postgrest
@@ -16,6 +19,7 @@ import io.github.jan.supabase.postgrest.query.Returning
 import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.decodeRecord
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
 import kotlinx.coroutines.channels.awaitClose
@@ -26,6 +30,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.serialization.json.Json
 
 class GameRemoteDataSourceImpl(
@@ -36,7 +41,7 @@ class GameRemoteDataSourceImpl(
     private val TABLEGAMEPLAYER = "game_player"
     private val TABLEMOVES = "moves"
 
-    override suspend fun createGame(gameCreationDTO: GameCreationDTO): Game? {
+    override suspend fun createGame(gameCreationDTO: GameCreationDTO): GamePlayer? {
         try {
             val result = supabaseClient.postgrest.rpc(
                 "create_game_and_player",
@@ -44,11 +49,14 @@ class GameRemoteDataSourceImpl(
             ).data
 
             val json = result.toString()
-            val gameDTO = Json { ignoreUnknownKeys = true }
-                .decodeFromString<GameJoinDTO>(json)
-            val game = gameDTO.toGame()
-            Log.i("checking", game.toString())
-            return game
+            val gamePlayerDTO = Json { ignoreUnknownKeys = true }
+                .decodeFromString<GamePlayerDTO>(json)
+            if(gamePlayerDTO==null){
+                return null
+            }
+            Log.i("TTT - checking", gamePlayerDTO.toString())
+            val gamePlayer = gamePlayerDTO.toGamePlayer()
+            return gamePlayer
 
         } catch (e: RestException) {
             // Handle database-related errors (constraints, RLS, etc.)
@@ -141,26 +149,26 @@ class GameRemoteDataSourceImpl(
 
     }
 
-    override suspend fun joinGame(gamePlayerDTO: GamePlayerDTO): Boolean {
+    override suspend fun joinGame(gameJoiningPlayerDTO: GameJoiningPlayerDTO): GamePlayerDTO? {
         return try {
             val result = supabaseClient.postgrest["game_player"].insert(
-                value = gamePlayerDTO,
-                request = {
-                    // We set the returning preference inside the lambda
-                    Returning.Minimal
-                }
-            )
-            Log.i("joinGame",result.data)
-            true
+                value = gameJoiningPlayerDTO
+            ) {
+                select()
+            }
+            val insertedPlayer = result.decodeSingle<GamePlayerDTO>()
+            Log.i("TTT - checkingjoinGame",insertedPlayer.toString())
+            insertedPlayer
         } catch (e: Exception) {
             // Handle RLS errors, constraint violations, or network issues
             println("Error inserting game player: ${e.message}")
-            false
+            null
         }
     }
 
     override suspend fun startListeningForGameJoins(gameId: Int): Flow<Unit> {
 
+        Log.i("TTT - checking","startListeningForGameJoins")
         return callbackFlow {
             val channel = supabaseClient.realtime.channel("game_joined_$gameId")
 
@@ -193,7 +201,7 @@ class GameRemoteDataSourceImpl(
 
     override suspend fun makeMove(moveDTO: MoveDTO): Boolean {
         return try {
-            val result = supabaseClient.postgrest["move"].insert(
+            val result = supabaseClient.postgrest["moves"].insert(
                 value = moveDTO,
                 request = {
                     // We set the returning preference inside the lambda
@@ -209,21 +217,26 @@ class GameRemoteDataSourceImpl(
         }
     }
 
-    override suspend fun startListeningForMovesInGame(gamePlayerId: Int): Flow<Unit> {
+    override suspend fun startListeningForMovesInGame(gameId: Int): Flow<MoveDTO> {
 
         return callbackFlow {
-            val channel = supabaseClient.realtime.channel("move_completed_$gamePlayerId")
+            val channel = supabaseClient.realtime.channel("move_completed_$gameId")
 
             val flow = channel.postgresChangeFlow<PostgresAction>(
                 schema = "public",
-                filter = { "table=$TABLEMOVES, game_player_id=eq.$gamePlayerId" }
+                filter = { "table=$TABLEMOVES, game_id=eq.$gameId" }
             )
 
             // Collect DB events
             val job = launch {
                 flow.collect { action ->
                     if (action is PostgresAction.Insert) {
-                        trySend(Unit)
+                        try {
+                            val move = action.decodeRecord<MoveDTO>()
+                            trySend(move)
+                        } catch (e: Exception) {
+                            Log.e("RealtimeMove", "Error decoding move: ${e.message}")
+                        }
                     }
                 }
             }

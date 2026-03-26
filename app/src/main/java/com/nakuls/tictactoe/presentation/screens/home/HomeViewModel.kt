@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import com.nakuls.tictactoe.domain.model.Game
+import com.nakuls.tictactoe.domain.model.GamePlayer
 import com.nakuls.tictactoe.domain.utils.Constants
 import com.nakuls.tictactoe.presentation.screens.profile.ProfileUiState
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -105,24 +106,26 @@ class HomeViewModel(
                 .firstOrNull()
 
             if(createdBy != null) {
-                var game: Game? = null
+                var gamePlayer: GamePlayer? = null
                 try {
-                    game = gameRepository.createGame(
+                    gamePlayer = gameRepository.createGame(
                         createdBy = createdBy,
                         length = length,
                         status = 0
                     )
-                    _hasActiveGames.value = game!=null
+                    _hasActiveGames.value = gamePlayer!=null
                     setActiveGamesStatus(_hasActiveGames.value)
                 } catch (ex: Exception){
                     _uiState.value = HomeUiState.Error("Unable to create a game")
                 } finally {
-                    _uiState.value = HomeUiState.Idle
-                    if(_hasActiveGames.value && game!= null && game.id != null){
-                        gameRepository.startListeningForGameJoins(game.id!!).collect {
+                    _uiState.value = HomeUiState.Processing
+                    Log.i("TTT - checking","inside finally")
+                    if(_hasActiveGames.value && gamePlayer!= null && gamePlayer.gameID != null){
+                        gameRepository.startListeningForGameJoins(gamePlayer.gameID!!).collect {
                             // navigate when joiner arrives
-                            Log.i("checking","Listening for player 2")
-                            _navigationEvents.emit(HomeNavigationEvent.NavigateToGame(game.id!!))
+                            Log.i("TTT - checking","Listening for player 2")
+                            _uiState.value = HomeUiState.Idle
+                            _navigationEvents.emit(HomeNavigationEvent.NavigateToGame(gamePlayer.gameID!!))
                         }
                     }
                 }
@@ -149,13 +152,15 @@ class HomeViewModel(
                 .firstOrNull()
 
             if(userID != null) {
+                var gamePlayerID : Int? = null
                 try {
-                    _hasActiveGames.value = gameRepository.joinGame(
-                        gameID,
-                        userID
-                    )
-                    setActiveGamesStatus(_hasActiveGames.value)
-                    _navigationEvents.emit(HomeNavigationEvent.NavigateToGame(gameID))
+                _hasActiveGames.value = false
+                gamePlayerID = gameRepository.joinGame(gameID,userID)
+                if ((gamePlayerID != null)){
+                    _hasActiveGames.value = true
+                }
+                setActiveGamesStatus(_hasActiveGames.value)
+                _navigationEvents.emit(HomeNavigationEvent.NavigateToGame(gameID))
                 } catch (ex: Exception){
                     _uiState.value = HomeUiState.Error("Unable to join the game")
                 } finally {

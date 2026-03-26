@@ -9,4 +9,8 @@ object Constants {
     public val USEREMAILKEY = stringPreferencesKey("user_email")
     public val USERID = intPreferencesKey("user_id")
     public val HASACTIVEGAMES = booleanPreferencesKey("has_active_games")
+    public val GAMEID = intPreferencesKey("game_id")
+    public val GAMEPLAYERID = intPreferencesKey("game_player_id")
+    public val ISGAMEOWNER = booleanPreferencesKey("is_game_owner")
 }
+

@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.nakuls.tictactoe.WinDetectionStrategy
+import com.nakuls.tictactoe.data.local.GameLocal
+import com.nakuls.tictactoe.data.local.GameLocalDataSourceImpl
 import com.nakuls.tictactoe.data.local.UserProfileLocal
 import com.nakuls.tictactoe.data.local.UserProfileLocalDataSourceImpl
 import com.nakuls.tictactoe.data.remote.ApiConfig
@@ -19,6 +22,7 @@ import com.nakuls.tictactoe.presentation.screens.game.GameViewModel
 import com.nakuls.tictactoe.presentation.screens.home.HomeViewModel
 import com.nakuls.tictactoe.presentation.screens.profile.ProfileViewModel
 import com.nakuls.tictactoe.presentation.screens.splash.SplashViewModel
+import com.nakuls.tictactoe.stratergy.RowColumnDiagonalStratergy
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
@@ -34,10 +38,15 @@ val appModule = module {
         androidContext().userPreferencesDataStore
     }
 
+    single<WinDetectionStrategy> { RowColumnDiagonalStratergy() }
+
     single { ApiConfig.httpClient }
 
     // --- ViewModels ---
-    viewModel { SplashViewModel(userRepository = get()) }
+    viewModel { SplashViewModel(
+        userRepository = get(),
+        get()
+    ) }
     viewModel { ProfileViewModel(userRepository = get()) }
     viewModel { HomeViewModel(
         gameRepository = get(),
@@ -45,6 +54,7 @@ val appModule = module {
     ) }
     viewModel { GameViewModel(
         gameRepository = get(),
+        get(),
         get()
     ) }
 
@@ -81,6 +91,12 @@ val appModule = module {
         )
     }
 
+    single<GameLocal> {
+        GameLocalDataSourceImpl(
+            dataStore = get(),
+        )
+    }
+
     // --- Repositories (from data layer) ---
      single<UserRepository> {
          UserRepositoryImpl(
@@ -89,7 +105,7 @@ val appModule = module {
      ) }
     single<GameRepository> {
         GameRepositoryImpl(
-            get()
+            get(),get()
     ) }
 
     // --- Data Sources (from data layer) ---

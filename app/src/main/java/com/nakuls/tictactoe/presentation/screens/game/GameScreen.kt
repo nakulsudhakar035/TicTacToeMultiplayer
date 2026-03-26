@@ -1,5 +1,8 @@
 package com.nakuls.tictactoe.presentation.screens.game
 
+import android.provider.Settings.Global.getString
+import android.widget.Toast
+import androidx.activity.result.launch
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -11,18 +14,21 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -31,12 +37,17 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,17 +55,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.nakuls.tictactoe.R
 import com.nakuls.tictactoe.domain.model.Move
+import com.nakuls.tictactoe.presentation.navigation.Screen
 import com.nakuls.tictactoe.presentation.screens.home.AppTheme
 import com.nakuls.tictactoe.presentation.screens.home.HomeViewModel
 import com.nakuls.tictactoe.presentation.screens.home.NewGameButton
 import com.nakuls.tictactoe.presentation.ui.theme.BackgroundLight
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import kotlin.collections.List
 
@@ -72,12 +87,15 @@ fun GameScreen(
     gameID: Int? = 1,//TODO remove default
     viewModel: GameViewModel = koinViewModel()
 ) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(key1 = Unit) {
         viewModel.initializeGame(gameID)
     }
 
     AppTheme {
         Scaffold(
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
             // Use background color that provides good contrast to the cards
             containerColor = BackgroundLight,
             bottomBar = {
@@ -91,7 +109,14 @@ fun GameScreen(
                     // --- Reset Game Button ---
                     Button(
                         onClick = {
-
+                            viewModel.resetGameSession {
+                                // Navigate back to Home/Lobby and clear the GameScreen from the backstack
+                                navController.navigate(Screen.Home.route) {
+                                    popUpTo(Screen.Profile.route) {
+                                        inclusive = true
+                                    }
+                                }
+                            }
                         },
                         modifier = Modifier
                             .fillMaxWidth(0.8f) // Make button wider
@@ -109,7 +134,7 @@ fun GameScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Reset Game",
+                                text = "End Game",
                                 color = colorResource(R.color.DarkNavy),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -120,68 +145,114 @@ fun GameScreen(
             }
         ) { paddingValues ->
             Game(
-                currentTurn = Mark.X,
-                onCellClicked = {},
+                snackbarHostState = snackbarHostState,
                 modifier = Modifier.padding(paddingValues),
                 viewModel = viewModel
             )
         }
+    }
+    // Handle Win State
+    when (val state = uiState) {
+        is GameUiState.Success -> {
+            AlertDialog(
+                onDismissRequest = { /* Handle if needed */ },
+                title = { Text("Game Over!") },
+                text = { Text("${state.name} won the match!") },
+                confirmButton = {
+                    Button(onClick = { viewModel.resetGameSession {
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(Screen.Profile.route) {
+                                inclusive = true
+                            }
+                        }
+                    } }) {
+                        Text("Back to Lobby")
+                    }
+                }
+            )
+        }
+        is GameUiState.Error -> {
+            // Show error snackbar
+        }
+        else -> {}
     }
 }
 
 @Composable
 fun Game(
     modifier: Modifier = Modifier,
-    currentTurn: Mark = Mark.X, // Who's turn is it?
-    board: List<Mark> = remember { List(9) { Mark.NONE } }, // 3x3 board state
-    onCellClicked: (Int) -> Unit = {},
-    viewModel: GameViewModel
+    viewModel: GameViewModel,
+    snackbarHostState: SnackbarHostState
 ) {
-    // For demonstration, let's create a local mutable board state
-    // In a real app, this would come from the ViewModel
-    var currentBoard by remember { mutableStateOf(board) }
-    var currentPlayerTurn by remember { mutableStateOf(currentTurn) }
+    val scope = rememberCoroutineScope()
+
+    // 1. Observe the StateFlow from ViewModel
+    val gameState by viewModel.game.collectAsStateWithLifecycle()
+    val errorMessageRetry = stringResource(R.string.please_retry)
+    val isCreator by viewModel.isCreator.collectAsStateWithLifecycle()
+
+    // 2. Map the CharArray from DB (' ', 'x', 'o') to your UI Marks
+    val currentBoard = remember(gameState) {
+        gameState?.charArray?.map {
+            when (it) {
+                'x' -> Mark.X
+                'o' -> Mark.O
+                else -> Mark.NONE
+            }
+        } ?: List(9) { Mark.NONE }
+    }
+
+    // 2. Logic: Creator is X, Joiner is O.
+    // Even total moves = X's turn. Odd total moves = O's turn.
+    val movesMade = currentBoard.count { it != Mark.NONE }
+    val isXTurn = movesMade % 2 == 0
+
+    // 3. Determine if it's "Your Turn"
+    val isMyTurn = (isXTurn && isCreator) || (!isXTurn && !isCreator)
 
     // This Box serves as the main container and applies padding
     Box(
-        modifier = modifier.fillMaxSize()
+        modifier = modifier
+            .fillMaxSize()
             .padding(top = 16.dp),
-        contentAlignment = Alignment.BottomCenter
+        contentAlignment = Alignment.Center
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 8.dp),
+                .fillMaxHeight()
+                .widthIn(max = 600.dp) // Prevents the UI from getting too wide on tablets
+                .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp) // Spacing between major sections
+            verticalArrangement = Arrangement.SpaceEvenly // Spacing between major sections
         ) {
             // --- Scoreboard Section ---
             Row(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
                     .padding(top = 16.dp),
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 ScoreCard(
-                    playerMark = Mark.O,
+                    playerMark = Mark.X,
                     score = 0,
-                    isCurrentPlayer = currentPlayerTurn == Mark.O,
+                    isCurrentPlayer = isMyTurn,
                     cardColor = colorResource(R.color.PlayerOCardColor) // Light blue
                 )
                 ScoreCard(
-                    playerMark = Mark.X,
+                    playerMark = Mark.O,
                     score = 0,
-                    isCurrentPlayer = currentPlayerTurn == Mark.X,
+                    isCurrentPlayer = isMyTurn,
                     cardColor = colorResource(R.color.PlayerXCardColor) // Light green
                 )
             }
 
             // --- Turn Indicator ---
             Text(
-                text = if (currentPlayerTurn == Mark.X) "Your Turn" else "Opponent's Turn", // Dynamic turn display
+                text = if (isMyTurn) "Your Turn" else "Opponent's Turn", // Dynamic turn display
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = colorResource(R.color.TextLight),
+                color = colorResource(R.color.DarkNavy),
                 modifier = Modifier.padding(vertical = 16.dp)
             )
 
@@ -189,18 +260,14 @@ fun Game(
             TicTacToeGrid(
                 boardState = currentBoard,
                 onCellClick = { index ->
-                    // Example logic to update board (replace with ViewModel logic)
-                    if (currentBoard[index] == Mark.NONE) {
-                        /*val newBoard = currentBoard.toMutableList()
-                        newBoard[index] = currentPlayerTurn
-                        currentBoard = newBoard
-
-                        // Switch turn for demonstration
-                        currentPlayerTurn = if (currentPlayerTurn == Mark.O) Mark.X else Mark.O
-
-                        // In real app, call ViewModel:
-                        onCellClicked(index)*/
-                        viewModel.makeMove(index)
+                    // Only allow clicking if the cell is empty
+                    if (currentBoard[index] == Mark.NONE && isMyTurn) {
+                        scope.launch {
+                            val isMoveSuccessful = viewModel.makeMove(index)
+                            if (!isMoveSuccessful) {
+                                snackbarHostState.showSnackbar(errorMessageRetry)
+                            }
+                        }
                     }
                 }
             )
@@ -253,7 +320,7 @@ fun ScoreCard(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = if (playerMark == Mark.O) "You :" else "Bot :", // Dynamic player name
+                    text = if (playerMark == Mark.O) "You :" else "Other :", // Dynamic player name
                     color = colorResource(R.color.DarkNavy),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Medium
@@ -277,25 +344,31 @@ fun TicTacToeGrid(
     // This Box ensures the grid remains square and is centered
     Box(
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxHeight(0.7f)
             .aspectRatio(1f) // Make the grid square
             .clip(RoundedCornerShape(16.dp)) // Rounded corners for the entire grid area
             .background(colorResource(R.color.DarkNavy)) // Dark background for the grid itself
-            .border(2.dp, colorResource(R.color.TextLight).copy(alpha = 0.5f), RoundedCornerShape(16.dp)) // Subtle border
+            .border(
+                2.dp,
+                colorResource(R.color.TextLight).copy(alpha = 0.5f),
+                RoundedCornerShape(16.dp)
+            ) // Subtle border
             .padding(8.dp), // Inner padding
         contentAlignment = Alignment.Center
     ) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3), // 3 columns for Tic-Tac-Toe
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp), // Spacing between cells
-            verticalArrangement = Arrangement.spacedBy(8.dp),   // Spacing between rows
-        ) {
-            itemsIndexed(boardState) { index, mark ->
-                GridCell(
-                    mark = mark,
-                    onClick = { onCellClick(index) }
-                )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (i in 0 until 3) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (j in 0 until 3) {
+                        val index = i * 3 + j
+                        Box(modifier = Modifier.weight(1f)) {
+                            GridCell(
+                                mark = boardState[index],
+                                onClick = { onCellClick(index) }
+                            )
+                        }
+                    }
+                }
             }
         }
     }

@@ -1,11 +1,11 @@
 package com.nakuls.tictactoe.stratergy
 
-import com.nakuls.tictactoe.WinDetectionStratergy
+import com.nakuls.tictactoe.WinDetectionStrategy
 import com.nakuls.tictactoe.domain.model.Game
 import com.nakuls.tictactoe.domain.model.Move
 import com.nakuls.tictactoe.domain.model.Player
 
-class RowColumnDiagonalStratergy: WinDetectionStratergy {
+class RowColumnDiagonalStratergy: WinDetectionStrategy {
 
     override fun checkIfMatchPoint(
         player: Player,
@@ -65,7 +65,7 @@ class RowColumnDiagonalStratergy: WinDetectionStratergy {
         val size = game.length*game.length
 
         var startIndex = move.index
-        while(startIndex > game.length){
+        while(startIndex >= game.length){
             startIndex = startIndex - game.length
         }
         var symbolCount = 0
