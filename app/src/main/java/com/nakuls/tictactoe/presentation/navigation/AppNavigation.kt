@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.nakuls.tictactoe.presentation.screens.game.GameScreen
+import com.nakuls.tictactoe.presentation.screens.game.LocalGameScreen
 import com.nakuls.tictactoe.presentation.screens.home.HomeScreen
 import com.nakuls.tictactoe.presentation.screens.profile.ProfileScreen
 import com.nakuls.tictactoe.presentation.screens.splash.SplashScreen
@@ -50,6 +51,10 @@ fun AppNavigation(
                 navController = navController,
                 gameID = gameId
             )
+        }
+
+        composable(Screen.LocalGame.route) {
+            LocalGameScreen(navController = navController)
         }
     }
 }

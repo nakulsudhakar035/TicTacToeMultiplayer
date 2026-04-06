@@ -8,4 +8,6 @@ sealed class Screen(val route: String) {
     object Game : Screen("game_screen/{gameId}") {
         fun createRoute(gameId: Int) = "game_screen/$gameId"
     }
+
+    object LocalGame : Screen("local_game_screen")
 }

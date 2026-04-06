@@ -48,31 +48,24 @@ fun ProfileScreen(
     navController: NavController,
     viewModel: ProfileViewModel = koinViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val usernameInput by viewModel.usernameInput.collectAsStateWithLifecycle()
-    val useremailInput by viewModel.useremailInput.collectAsStateWithLifecycle()
+    val screenState by viewModel.screenState.collectAsStateWithLifecycle()
 
+    // Per-field error display — pure presentation logic, not used for button gating
     val minLength = 3
-    val isNameValid = usernameInput.length >= minLength
-    val isEmailValid = EmailAddressValidator.isValidEmail(useremailInput)
-    val isButtonEnabled = isNameValid && uiState != ProfileUiState.Saving && isEmailValid
+    val isNameValid = screenState.username.length >= minLength
+    val isEmailValid = EmailAddressValidator.isValidEmail(screenState.email)
 
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    // --- Side Effect: Navigation and SnackBar ---
-    LaunchedEffect(uiState) {
-        when (uiState) {
+    LaunchedEffect(screenState.uiState) {
+        when (screenState.uiState) {
             is ProfileUiState.Success -> {
-                // Profile saved successfully, navigate to Home
-
                 navController.navigate(Screen.Home.route) {
                     popUpTo(Screen.Profile.route) { inclusive = true }
                 }
             }
             is ProfileUiState.Error -> {
-                // Show error message (e.g., using a Snackbar or Toast)
-                // For simplicity, we'll just print it for now:
-                println("Error: ${(uiState as ProfileUiState.Error).message}")
+                println("Error: ${(screenState.uiState as ProfileUiState.Error).message}")
             }
             else -> {}
         }
@@ -100,7 +93,6 @@ fun ProfileScreen(
             ) {
                 Spacer(modifier = Modifier.weight(0.5f))
 
-                // --- Branding Icon ---
                 Icon(
                     imageVector = Icons.Filled.AddCircle,
                     contentDescription = "Game Icon",
@@ -110,59 +102,61 @@ fun ProfileScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // --- Input Field ---
                 OutlinedTextField(
-                    value = usernameInput,
-                    onValueChange = viewModel::onUsernameChange, // Pass control to ViewModel
+                    value = screenState.username,
+                    onValueChange = viewModel::onUsernameChange,
                     label = { Text("Username") },
                     placeholder = { Text("e.g., winner") },
                     leadingIcon = { Icon(Icons.Filled.AccountCircle, "Username") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    isError = usernameInput.isNotEmpty() && !isNameValid,
+                    isError = screenState.username.isNotEmpty() && !isNameValid,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { viewModel.saveProfile() })
                 )
 
-                // --- Error Message/Status ---
-                if (usernameInput.isNotEmpty() && !isNameValid) {
+                if (screenState.username.isNotEmpty() && !isNameValid) {
                     Text(
                         text = "Username must be at least $minLength characters",
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 4.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, top = 4.dp)
                     )
                 }
 
                 OutlinedTextField(
-                    value = useremailInput,
-                    onValueChange = viewModel::onEmailChange, // Pass control to ViewModel
+                    value = screenState.email,
+                    onValueChange = viewModel::onEmailChange,
                     label = { Text("Email address") },
                     placeholder = { Text("e.g., winner@gmail.com") },
                     leadingIcon = { Icon(Icons.Filled.Email, "Email address") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    isError = useremailInput.isNotEmpty() && !isEmailValid,
+                    isError = screenState.email.isNotEmpty() && !isEmailValid,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { viewModel.saveProfile() })
                 )
-                if (uiState is ProfileUiState.Saving) {
+
+                if (screenState.uiState is ProfileUiState.Saving) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // --- Save Button ---
                 Button(
                     onClick = {
                         keyboardController?.hide()
                         viewModel.saveProfile()
                     },
-                    enabled = isButtonEnabled,
-                    modifier = Modifier.fillMaxWidth().height(56.dp)
+                    enabled = screenState.isSaveEnabled,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
                 ) {
                     Text(
-                        text = if (uiState is ProfileUiState.Saving) "Saving..." else "Save Profile and Continue",
+                        text = if (screenState.uiState is ProfileUiState.Saving) "Saving..." else "Save Profile and Continue",
                         fontSize = 18.sp
                     )
                 }
@@ -172,8 +166,6 @@ fun ProfileScreen(
         }
     }
 }
-
-// --- Preview Composable ---
 
 @Preview(showBackground = true)
 @Composable

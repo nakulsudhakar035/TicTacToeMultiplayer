@@ -1,111 +1,88 @@
 package com.nakuls.tictactoe.presentation.screens.home
 
-import android.app.Application
-import android.content.Context
 import android.util.Log
-import androidx.compose.runtime.MutableIntState
-import androidx.compose.runtime.MutableState
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.nakuls.tictactoe.domain.repository.GameRepository
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
 import com.nakuls.tictactoe.domain.model.Game
 import com.nakuls.tictactoe.domain.model.GamePlayer
+import com.nakuls.tictactoe.domain.repository.GameRepository
 import com.nakuls.tictactoe.domain.utils.Constants
-import com.nakuls.tictactoe.presentation.screens.profile.ProfileUiState
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.stateIn
-import java.lang.Exception
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 sealed class HomeUiState {
-    object Idle : HomeUiState()       // Initial state, ready for action
-    object LoadingGames : HomeUiState()     // Fetching games
-    object Processing : HomeUiState()     // Processing creating or joining a game
-    data class Success(val name: String) : HomeUiState() // Save complete, contains the name
-    data class Error(val message: String) : HomeUiState() // Failed to save
+    object Idle : HomeUiState()
+    object LoadingGames : HomeUiState()
+    object Processing : HomeUiState()
+    data class NavigateToGame(val gameId: Int) : HomeUiState()
+    data class Error(val message: String) : HomeUiState()
 }
-sealed class HomeNavigationEvent {
-    data class NavigateToGame(val gameId: Int) : HomeNavigationEvent()
-}
+
+data class HomeScreenState(
+    val games: List<Game> = emptyList(),
+    val hasActiveGames: Boolean = false,
+    val uiState: HomeUiState = HomeUiState.Idle
+)
+
 class HomeViewModel(
     private val gameRepository: GameRepository,
     private val dataStore: DataStore<Preferences>
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Idle)
-    val uiState: StateFlow<HomeUiState> = _uiState
-    private val _joinableGames = MutableStateFlow<List<Game>>(emptyList())
-    val joinableGames: StateFlow<List<Game>> = _joinableGames
-    private val _hasActiveGames = MutableStateFlow(false)
-    var hasActiveGames: StateFlow<Boolean> = _hasActiveGames
-    private val _navigationEvents = MutableSharedFlow<HomeNavigationEvent>()
-    val navigationEvents = _navigationEvents.asSharedFlow()
+    private val _screenState = MutableStateFlow(HomeScreenState())
+    val screenState: StateFlow<HomeScreenState> = _screenState.asStateFlow()
 
     init {
-        // 1. Create a flow pipeline to extract the Boolean from DataStore
-        val dataStoreFlow = dataStore.data
-            .map { preferences ->
-                preferences[Constants.HASACTIVEGAMES] ?: false
-            }
-        // 2. Launch a coroutine to continuously COLLECT the DataStore flow.
-        // Every time DataStore emits a new value, we update the private MutableStateFlow.
-        dataStoreFlow
+        dataStore.data
+            .map { preferences -> preferences[Constants.HASACTIVEGAMES] ?: false }
             .onEach { isGameActive ->
-                // 3. Imperatively assign the collected Boolean value to the MutableStateFlow's value property
-                _hasActiveGames.value = isGameActive
+                _screenState.update { it.copy(hasActiveGames = isGameActive) }
             }
-            // 4. Start the collection and tie it to the ViewModel's lifecycle
             .launchIn(viewModelScope)
         getGames()
     }
 
-    fun getGames() {
-        _uiState.value = HomeUiState.LoadingGames
+    fun onNavigationConsumed() {
+        _screenState.update { it.copy(uiState = HomeUiState.Idle) }
+    }
+
+    private fun getGames() {
+        _screenState.update { it.copy(uiState = HomeUiState.LoadingGames) }
         viewModelScope.launch {
-            val createdBy =  dataStore.data
-                .map { preferences ->
-                    preferences[Constants.USERID]
-                }
+            val createdBy = dataStore.data
+                .map { preferences -> preferences[Constants.USERID] }
                 .firstOrNull()
-            if(createdBy != null) {
+            if (createdBy != null) {
                 try {
-                    _uiState.value = HomeUiState.Idle
-                    gameRepository.getJoinableGamesStream(createdBy).collect {
-                        _joinableGames.value = it
+                    gameRepository.getJoinableGamesStream(createdBy).collect { games ->
+                        _screenState.update { it.copy(games = games, uiState = HomeUiState.Idle) }
                     }
-                } catch (ex: kotlin.Exception){
-                    _uiState.value = HomeUiState.Error("Unable to fetch available games")
+                } catch (ex: Exception) {
+                    _screenState.update { it.copy(uiState = HomeUiState.Error("Unable to fetch available games")) }
                 }
             } else {
-                _uiState.value = HomeUiState.Error("Unable to identify your profile")
-                //TODO log user out
+                _screenState.update { it.copy(uiState = HomeUiState.Error("Unable to identify your profile")) }
             }
         }
     }
 
-    fun createGame(length: Int){
-        _uiState.value = HomeUiState.Processing
+    fun createGame(length: Int) {
+        _screenState.update { it.copy(uiState = HomeUiState.Processing) }
         viewModelScope.launch {
-            val createdBy =  dataStore.data
-                .map { preferences ->
-                    preferences[Constants.USERID]
-                }
+            val createdBy = dataStore.data
+                .map { preferences -> preferences[Constants.USERID] }
                 .firstOrNull()
-
-            if(createdBy != null) {
+            if (createdBy != null) {
                 var gamePlayer: GamePlayer? = null
                 try {
                     gamePlayer = gameRepository.createGame(
@@ -113,25 +90,23 @@ class HomeViewModel(
                         length = length,
                         status = 0
                     )
-                    _hasActiveGames.value = gamePlayer!=null
-                    setActiveGamesStatus(_hasActiveGames.value)
-                } catch (ex: Exception){
-                    _uiState.value = HomeUiState.Error("Unable to create a game")
+                    val hasActiveGames = gamePlayer != null
+                    _screenState.update { it.copy(hasActiveGames = hasActiveGames) }
+                    setActiveGamesStatus(hasActiveGames)
+                } catch (ex: Exception) {
+                    _screenState.update { it.copy(uiState = HomeUiState.Error("Unable to create a game")) }
                 } finally {
-                    _uiState.value = HomeUiState.Processing
-                    Log.i("TTT - checking","inside finally")
-                    if(_hasActiveGames.value && gamePlayer!= null && gamePlayer.gameID != null){
+                    Log.i("TTT - checking", "inside finally")
+                    if (_screenState.value.hasActiveGames && gamePlayer?.gameID != null) {
+                        _screenState.update { it.copy(uiState = HomeUiState.Processing) }
                         gameRepository.startListeningForGameJoins(gamePlayer.gameID!!).collect {
-                            // navigate when joiner arrives
-                            Log.i("TTT - checking","Listening for player 2")
-                            _uiState.value = HomeUiState.Idle
-                            _navigationEvents.emit(HomeNavigationEvent.NavigateToGame(gamePlayer.gameID!!))
+                            Log.i("TTT - checking", "Listening for player 2")
+                            _screenState.update { it.copy(uiState = HomeUiState.NavigateToGame(gamePlayer.gameID!!)) }
                         }
                     }
                 }
             } else {
-                _uiState.value = HomeUiState.Error("Unable to identify your profile")
-                //TODO log user out
+                _screenState.update { it.copy(uiState = HomeUiState.Error("Unable to identify your profile")) }
             }
         }
     }
@@ -142,33 +117,24 @@ class HomeViewModel(
         }
     }
 
-    fun joinGame(gameID: Int){
-        _uiState.value = HomeUiState.Processing
+    fun joinGame(gameID: Int) {
+        _screenState.update { it.copy(uiState = HomeUiState.Processing) }
         viewModelScope.launch {
             val userID = dataStore.data
-                .map { preferences ->
-                    preferences[Constants.USERID]
-                }
+                .map { preferences -> preferences[Constants.USERID] }
                 .firstOrNull()
-
-            if(userID != null) {
-                var gamePlayerID : Int? = null
+            if (userID != null) {
                 try {
-                _hasActiveGames.value = false
-                gamePlayerID = gameRepository.joinGame(gameID,userID)
-                if ((gamePlayerID != null)){
-                    _hasActiveGames.value = true
-                }
-                setActiveGamesStatus(_hasActiveGames.value)
-                _navigationEvents.emit(HomeNavigationEvent.NavigateToGame(gameID))
-                } catch (ex: Exception){
-                    _uiState.value = HomeUiState.Error("Unable to join the game")
-                } finally {
-                    _uiState.value = HomeUiState.Idle
+                    val gamePlayerID = gameRepository.joinGame(gameID, userID)
+                    val hasActiveGames = gamePlayerID != null
+                    _screenState.update { it.copy(hasActiveGames = hasActiveGames) }
+                    setActiveGamesStatus(hasActiveGames)
+                    _screenState.update { it.copy(uiState = HomeUiState.NavigateToGame(gameID)) }
+                } catch (ex: Exception) {
+                    _screenState.update { it.copy(uiState = HomeUiState.Error("Unable to join the game")) }
                 }
             } else {
-                _uiState.value = HomeUiState.Error("Unable to identify your profile")
-                //TODO log user out
+                _screenState.update { it.copy(uiState = HomeUiState.Error("Unable to identify your profile")) }
             }
         }
     }

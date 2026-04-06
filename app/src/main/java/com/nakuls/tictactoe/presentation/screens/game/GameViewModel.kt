@@ -14,26 +14,37 @@ import com.nakuls.tictactoe.domain.model.Player
 import com.nakuls.tictactoe.domain.model.PlayerStatus
 import com.nakuls.tictactoe.domain.repository.GameRepository
 import com.nakuls.tictactoe.domain.utils.Constants
-import com.nakuls.tictactoe.presentation.screens.home.HomeUiState
 import com.nakuls.tictactoe.stratergy.RowColumnDiagonalStratergy
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.collections.remove
 
 sealed class GameUiState {
-    object Idle : GameUiState()       // Initial state, ready for action
-    object AwaitingMove : GameUiState()     // Fetching games
-    object Processing : GameUiState()     // Processing creating or joining a game
-    data class Success(val name: String) : GameUiState() // Save complete, contains the name
-    data class Error(val message: String) : GameUiState() // Failed to save
+    object Idle : GameUiState()
+    object AwaitingOpponent : GameUiState()
+    object Processing : GameUiState()
+    data class GameOver(val winnerName: String, val isDraw: Boolean = false) : GameUiState()
+    data class Error(val message: String) : GameUiState()
+    object SessionReset : GameUiState()
 }
+
+sealed class GameIntent {
+    data class Initialize(val gameId: Int) : GameIntent()
+    data class MakeMove(val index: Int) : GameIntent()
+    object ResetSession : GameIntent()
+}
+
+data class GameScreenState(
+    val game: Game? = null,
+    val isCreator: Boolean = false,
+    val isMyTurn: Boolean = false,
+    val uiState: GameUiState = GameUiState.Idle
+)
 
 class GameViewModel(
     private val gameRepository: GameRepository,
@@ -41,36 +52,24 @@ class GameViewModel(
     private val winDetectionStrategy: WinDetectionStrategy
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<GameUiState>(GameUiState.Idle)
-    val uiState: StateFlow<GameUiState> = _uiState
+    private val _screenState = MutableStateFlow(GameScreenState())
+    val screenState: StateFlow<GameScreenState> = _screenState.asStateFlow()
 
-    private val _gameId = MutableStateFlow<Int?>(null)
-    val gameId: StateFlow<Int?> = _gameId.asStateFlow()
-
-    private val _gamePlayerId = MutableStateFlow<Int?>(null)
-    val gamePlayerId: StateFlow<Int?> = _gamePlayerId.asStateFlow()
-
-    private val _game = MutableStateFlow<Game?>(null)
-    val game: StateFlow<Game?> = _game.asStateFlow()
-
-    val isCreator: StateFlow<Boolean> = dataStore.data
-        .map { preferences ->
-            val value = preferences[Constants.ISGAMEOWNER] ?: false
-            Log.d("TTT-Auth", "Flow emitted isCreator: $value")
-            value
+    fun onIntent(intent: GameIntent) {
+        when (intent) {
+            is GameIntent.Initialize -> initializeGame(intent.gameId)
+            is GameIntent.MakeMove -> makeMove(intent.index)
+            is GameIntent.ResetSession -> resetGameSession()
         }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false
-        )
+    }
 
-    fun initializeGame(id: Int?) {
-        if(_game.value == null) {
-            _gameId.value = id
-            _game.value = Game(
+    private fun initializeGame(id: Int) {
+        if (_screenState.value.game != null) return
+        viewModelScope.launch {
+            val isCreator = dataStore.data.map { it[Constants.ISGAMEOWNER] ?: false }.first()
+            val game = Game(
                 id = id,
-                status = GameStatus.UnFilled, // Use your actual enum
+                status = GameStatus.UnFilled,
                 length = 3,
                 owner = "",
                 winner = null,
@@ -79,103 +78,90 @@ class GameViewModel(
                 charArray = CharArray(9) { ' ' },
                 winDetectionStratergy = RowColumnDiagonalStratergy()
             )
+            // Creator (X) always goes first
+            _screenState.update { it.copy(game = game, isCreator = isCreator, isMyTurn = isCreator) }
+            observeOpponentMoves()
         }
-
-        // Start listening for moves as soon as we have a Game ID
-        observeOpponentMoves(id)
     }
 
-    private fun observeOpponentMoves(gameId: Int?) {
-
+    private fun observeOpponentMoves() {
         viewModelScope.launch {
-
-            if (gameId == null) return@launch // Safety check
-            _uiState.value = GameUiState.Idle
-            // 1. Get our own ID from DataStore to filter out our own moves
             val myRoleIsCreator = dataStore.data.map { it[Constants.ISGAMEOWNER] ?: false }.first()
-            val myPlayerId = dataStore.data.map { it[Constants.GAMEPLAYERID] }.firstOrNull() ?: return@launch
+            val myPlayerId = dataStore.data.map { it[Constants.GAMEPLAYERID] }.firstOrNull()
+                ?: return@launch
 
-            // 2. Start the realtime listener
-            gameRepository.startListeningForMovesInGame()
-                .collect { move ->
-                    val player = Player(
-                        id = 0,
-                        name = "",
-                        status = PlayerStatus.Active,
-                        score = 0,
-                        symbol = 'o',
-                        email = ""
-                    )
-                    Log.i("TTT - observeOpponentMoves",move.toString())
-                    if (move.playerID == myPlayerId) {
-                        // Now we are sure myRoleIsCreator is accurate for THIS session
-                        val mark = if (myRoleIsCreator) 'x' else 'o'
-                        val name = if (myRoleIsCreator) "You" else "Opponent"
-                        player.name = name
-                        player.symbol = mark
-                        updateLocalBoard(move.index, mark)
-                        _uiState.value = GameUiState.AwaitingMove
-                    } else {
-                        val mark = if (!myRoleIsCreator) 'x' else 'o'
-                        val name = if (!myRoleIsCreator) "You" else "Opponent"
-                        player.symbol = mark
-                        player.name = name
-                        updateLocalBoard(move.index, mark)
-                        //_uiState.value = GameUiState.AwaitingMove
-                    }
-                    if ((_game.value!!).moveCount <= (_game.value!!).charArray.size && winDetectionStrategy.checkIfMatchPoint(
-                            player,
-                            move.toMove(),
-                            _game.value!!)) {
-                        println("${player.name} wins")
-                        _uiState.value = GameUiState.Success(player.name)
-                        Log.i("TTT", "Winner found: ${player.name}")
-                    }
+            gameRepository.startListeningForMovesInGame().collect { move ->
+                val isMyMove = move.playerID == myPlayerId
+                // Creator is always 'x', joiner is always 'o'
+                val mark = if (isMyMove == myRoleIsCreator) 'x' else 'o'
+                val name = if (isMyMove) "You" else "Opponent"
+
+                Log.i("TTT - observeOpponentMoves", move.toString())
+                updateLocalBoard(move.index, mark)
+
+                val currentGame = _screenState.value.game ?: return@collect
+                val player = Player(
+                    id = 0,
+                    name = name,
+                    status = PlayerStatus.Active,
+                    score = 0,
+                    symbol = mark,
+                    email = ""
+                )
+
+                if (currentGame.moveCount <= currentGame.charArray.size &&
+                    winDetectionStrategy.checkIfMatchPoint(player, move.toMove(), currentGame)
+                ) {
+                    Log.i("TTT", "Winner found: $name")
+                    _screenState.update { it.copy(uiState = GameUiState.GameOver(name)) }
+                } else if (isMyMove) {
+                    _screenState.update { it.copy(uiState = GameUiState.AwaitingOpponent) }
                 }
+            }
         }
     }
 
-    init {
-        gameRepository.toString()
-        dataStore.toString()
+    private fun makeMove(index: Int) {
+        viewModelScope.launch {
+            val createdBy = dataStore.data
+                .map { preferences -> preferences[Constants.GAMEPLAYERID] }
+                .firstOrNull() ?: run {
+                _screenState.update { it.copy(uiState = GameUiState.Error("Unable to identify player")) }
+                return@launch
+            }
+            val success = gameRepository.makeMove(index, createdBy)
+            if (!success) {
+                _screenState.update { it.copy(uiState = GameUiState.Error("Move failed, please retry")) }
+            }
+        }
     }
 
     private fun updateLocalBoard(index: Int, char: Char) {
-        val current = _game.value ?: return
-        // 1. Create a NEW array instance (different memory address)
+        val current = _screenState.value.game ?: return
         val newArray = current.charArray.copyOf()
         newArray[index] = char
-        // 2. Push a NEW Game object into the StateFlow
-        // This triggers the UI update
-        _game.value = current.copy(
-            charArray = newArray,
-            moveCount = current.moveCount + 1)
-        Log.i("TTT - updateLocalBoard",_game.value.toString())
+        val newMoveCount = current.moveCount + 1
+        // Even moveCount → X's turn (creator). Odd → O's turn (joiner).
+        val isCreator = _screenState.value.isCreator
+        val isMyTurn = (newMoveCount % 2 == 0) == isCreator
+        _screenState.update {
+            it.copy(
+                game = current.copy(charArray = newArray, moveCount = newMoveCount),
+                isMyTurn = isMyTurn
+            )
+        }
+        Log.i("TTT - updateLocalBoard", _screenState.value.game.toString())
     }
 
-    suspend fun makeMove(index: Int): Boolean {
-        // 1. Get the player ID from DataStore
-        val createdBy = dataStore.data
-            .map { preferences ->
-                preferences[Constants.GAMEPLAYERID]
-            }
-            .firstOrNull() ?: return false // Return false if no ID found
-
-        // 2. Call the repository directly (suspend call)
-        return gameRepository.makeMove(index, createdBy)
-    }
-
-    fun resetGameSession(onComplete: () -> Unit) {
-        _uiState.value = GameUiState.Processing
+    private fun resetGameSession() {
+        _screenState.update { it.copy(uiState = GameUiState.Processing) }
         viewModelScope.launch {
             dataStore.edit { preferences ->
-                // Clear only game-related keys, keep user/auth keys
                 preferences.remove(Constants.GAMEPLAYERID)
                 preferences.remove(Constants.ISGAMEOWNER)
                 preferences.remove(Constants.HASACTIVEGAMES)
             }
-            _uiState.value = GameUiState.Idle
-            onComplete()
+            _screenState.update { it.copy(uiState = GameUiState.SessionReset) }
         }
     }
 }

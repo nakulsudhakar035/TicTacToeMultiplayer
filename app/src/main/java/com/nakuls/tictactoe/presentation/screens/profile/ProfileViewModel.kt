@@ -6,75 +6,90 @@ import com.nakuls.tictactoe.domain.repository.UserRepository
 import com.nakuls.tictactoe.domain.utils.EmailAddressValidator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 sealed class ProfileUiState {
-    object Idle : ProfileUiState()       // Initial state, ready for input
-    object Saving : ProfileUiState()     // Profile is being saved (e.g., show progress bar)
-    data class Success(val name: String) : ProfileUiState() // Save complete, contains the name
-    data class Error(val message: String) : ProfileUiState() // Failed to save
+    object Idle : ProfileUiState()
+    object Saving : ProfileUiState()
+    data class Success(val name: String) : ProfileUiState()
+    data class Error(val message: String) : ProfileUiState()
 }
+
+data class ProfileScreenState(
+    val username: String = "",
+    val email: String = "",
+    val isSaveEnabled: Boolean = false,
+    val uiState: ProfileUiState = ProfileUiState.Idle
+)
+
 class ProfileViewModel(
     private val userRepository: UserRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<ProfileUiState>(ProfileUiState.Idle)
-    val uiState: StateFlow<ProfileUiState> = _uiState
-
-    // State for the text field input, managed by the ViewModel
-    private val _usernameInput = MutableStateFlow("")
-    val usernameInput: StateFlow<String> = _usernameInput
-    private val _useremailInput = MutableStateFlow("")
-    val useremailInput: StateFlow<String> = _useremailInput
+    private val _screenState = MutableStateFlow(ProfileScreenState())
+    val screenState: StateFlow<ProfileScreenState> = _screenState.asStateFlow()
 
     fun onUsernameChange(newUsername: String) {
-        // Simple input validation/limiting can happen here
         if (newUsername.length <= 15) {
-            _usernameInput.value = newUsername.replace("\n", "")
+            _screenState.update { state ->
+                val updated = state.copy(username = newUsername.replace("\n", ""))
+                updated.copy(isSaveEnabled = computeIsSaveEnabled(updated))
+            }
         }
     }
 
     fun onEmailChange(newEmail: String) {
         if (newEmail.length <= 25) {
-            _useremailInput.value = newEmail.replace("\n", "")
+            _screenState.update { state ->
+                val updated = state.copy(email = newEmail.replace("\n", ""))
+                updated.copy(isSaveEnabled = computeIsSaveEnabled(updated))
+            }
         }
     }
 
-    // 2. Main action function
+    private fun computeIsSaveEnabled(state: ProfileScreenState): Boolean {
+        return state.username.trim().length >= 3
+            && EmailAddressValidator.isValidEmail(state.email.trim())
+            && state.uiState != ProfileUiState.Saving
+    }
+
     fun saveProfile() {
-        val username = _usernameInput.value.trim()
-        val email = _useremailInput.value.trim()
+        val username = _screenState.value.username.trim()
+        val email = _screenState.value.email.trim()
 
-        // Input Validation (should ideally be handled by a Use Case, but kept here for simplicity)
         if (username.length < 3) {
-            _uiState.value = ProfileUiState.Error("Username must be at least 3 characters.")
+            _screenState.update { it.copy(uiState = ProfileUiState.Error("Username must be at least 3 characters.")) }
             return
         }
-
         if (!EmailAddressValidator.isValidEmail(email)) {
-            _uiState.value = ProfileUiState.Error("Please enter a valid Email address.")
+            _screenState.update { it.copy(uiState = ProfileUiState.Error("Please enter a valid Email address.")) }
             return
         }
 
-        _uiState.value = ProfileUiState.Saving
+        _screenState.update { it.copy(uiState = ProfileUiState.Saving, isSaveEnabled = false) }
 
         viewModelScope.launch {
             try {
-                // 3. Call repository function
-                if(userRepository.saveUsername(
-                        username,
-                        email = email
-                    )){
-                    _uiState.value = ProfileUiState.Success(username)
+                if (userRepository.saveUsername(username, email = email)) {
+                    _screenState.update { it.copy(uiState = ProfileUiState.Success(username)) }
                 } else {
-                    _uiState.value = ProfileUiState.Error("Failed to save profile")
+                    _screenState.update {
+                        it.copy(
+                            uiState = ProfileUiState.Error("Failed to save profile"),
+                            isSaveEnabled = computeIsSaveEnabled(it)
+                        )
+                    }
                 }
-
             } catch (e: Exception) {
-                // Handle potential DataStore or network errors
-                _uiState.value = ProfileUiState.Error("Failed to save profile: ${e.localizedMessage}")
+                _screenState.update {
+                    it.copy(
+                        uiState = ProfileUiState.Error("Failed to save profile: ${e.localizedMessage}"),
+                        isSaveEnabled = computeIsSaveEnabled(it)
+                    )
+                }
             }
         }
     }
 }
-

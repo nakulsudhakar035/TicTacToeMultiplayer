@@ -28,7 +28,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -38,7 +37,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,17 +55,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
-import com.nakuls.tictactoe.stratergy.RowColumnDiagonalStratergy
+import com.nakuls.tictactoe.presentation.navigation.Screen
 import com.nakuls.tictactoe.presentation.ui.theme.AccentBlue
 import com.nakuls.tictactoe.presentation.ui.theme.BackgroundLight
 import com.nakuls.tictactoe.presentation.ui.theme.CardBackground
 import com.nakuls.tictactoe.presentation.ui.theme.HellesGreen
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import org.koin.androidx.compose.koinViewModel
 import com.nakuls.tictactoe.domain.model.Game
-import com.nakuls.tictactoe.domain.model.GameStatus
-import com.nakuls.tictactoe.presentation.screens.profile.ProfileUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,78 +69,52 @@ fun HomeScreen(
     navController: NavController,
     viewModel: HomeViewModel = koinViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val games by viewModel.joinableGames.collectAsState()
-    // 1. State to control the visibility of the Bottom Sheet
+    val screenState by viewModel.screenState.collectAsStateWithLifecycle()
+
     var showBottomSheet by rememberSaveable { mutableStateOf(false) }
-    // 2. State to hold the user input for game length
     var gameLengthInput by rememberSaveable { mutableStateOf("3") }
     val isLengthValid = remember(gameLengthInput) {
         gameLengthInput.toIntOrNull() != null && gameLengthInput.toIntOrNull()!! >= 2
     }
-    val hasActiveGames by viewModel.hasActiveGames.collectAsState()
 
-    // 1. State for the search query
-    var searchQuery by rememberSaveable { mutableStateOf("") } // Store the query
+    var searchQuery by rememberSaveable { mutableStateOf("") }
 
-    // 2. Filter the list based on the search query
-    val filteredGames= remember(games, searchQuery) {
+    val filteredGames = remember(screenState.games, searchQuery) {
         derivedStateOf {
-            val filteredList =if (searchQuery.isBlank()) {
-                games // Show all games if search is empty
+            val list = if (searchQuery.isBlank()) {
+                screenState.games
             } else {
-                games.filter { game ->
+                screenState.games.filter { game ->
                     val query = searchQuery.trim().lowercase()
-
-                    // Add your filtering criteria here:
-                    val matchesPlayer = game.owner.lowercase().contains(query)
-                    val matchesGameId = game.id.toString().contains(query)
-                    // Assuming email is available in your DTO, add:
-                    // val matchesEmail = game.player.email.lowercase().contains(query)
-
-                    matchesPlayer || matchesGameId
+                    game.owner.lowercase().contains(query) || game.id.toString().contains(query)
                 }
             }
-            filteredList.sortedByDescending { it.id }
+            list.sortedByDescending { it.id }
         }
     }
 
-    val navEvents = viewModel.navigationEvents.collectAsStateWithLifecycle(null)
-
-    LaunchedEffect(navEvents.value) {
-        when (val evt = navEvents.value) {
-            is HomeNavigationEvent.NavigateToGame -> {
-                navController.navigate("game_screen/${evt.gameId}")
-            }
-
-            null -> {
-
-            }
+    // Navigation: observe uiState, navigate when NavigateToGame is emitted
+    LaunchedEffect(screenState.uiState) {
+        if (screenState.uiState is HomeUiState.NavigateToGame) {
+            val gameId = (screenState.uiState as HomeUiState.NavigateToGame).gameId
+            navController.navigate("game_screen/$gameId")
+            viewModel.onNavigationConsumed()
         }
     }
 
-    // Use ModalBottomSheet for the slide-up window
     if (showBottomSheet) {
-        // Material 3 Modal Bottom Sheet
         ModalBottomSheet(
-            onDismissRequest = {
-                showBottomSheet = false // Dismiss when swiped down or tapped outside
-            },
-            // Optional: Customize container/content
+            onDismissRequest = { showBottomSheet = false },
             containerColor = BackgroundLight,
         ) {
-            // Content of the Bottom Sheet
             BottomSheetContent(
                 gameLengthInput = gameLengthInput,
                 onLengthChange = { gameLengthInput = it },
                 isInputError = !isLengthValid,
                 onCreateGame = {
-                    // 1. Validate input and convert to Int
                     val length = gameLengthInput.toIntOrNull()
                     if (isLengthValid) {
-                        // 2. Call ViewModel action
                         viewModel.createGame(length!!)
-                        // 3. Close the sheet
                         showBottomSheet = false
                     }
                 },
@@ -157,21 +125,22 @@ fun HomeScreen(
 
     AppTheme {
         Scaffold(
-            // Use background color that provides good contrast to the cards
             containerColor = BackgroundLight,
             bottomBar = {
-                // Bottom section: New Game Button
-                Box(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    PlayComputerButton(
+                        onClick = { navController.navigate(Screen.LocalGame.route) }
+                    )
                     NewGameButton(
-                        isEnabled = !hasActiveGames,
-                        onClick = {
-                            showBottomSheet = true
-                    })
+                        isEnabled = !screenState.hasActiveGames,
+                        onClick = { showBottomSheet = true }
+                    )
                 }
             }
         ) { paddingValues ->
@@ -188,17 +157,14 @@ fun HomeScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
 
-                // Top section: Search Bar and List
                 GameSearchBar(
                     searchQuery = searchQuery,
-                    onQueryChanged = { newQuery ->
-                        searchQuery = newQuery // Update the state when text changes
-                    }
+                    onQueryChanged = { searchQuery = it }
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if(uiState is HomeUiState.LoadingGames){
+                if (screenState.uiState is HomeUiState.LoadingGames) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = HellesGreen)
                     }
@@ -223,7 +189,6 @@ fun HomeScreen(
 
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
-    // Simplified theme for a vibrant, clean look
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(
             primary = HellesGreen,
@@ -232,8 +197,8 @@ fun AppTheme(content: @Composable () -> Unit) {
             surface = CardBackground
         ),
         shapes = MaterialTheme.shapes.copy(
-            extraLarge = RoundedCornerShape(24.dp), // For the button
-            large = RoundedCornerShape(16.dp), // For cards
+            extraLarge = RoundedCornerShape(24.dp),
+            large = RoundedCornerShape(16.dp),
             medium = RoundedCornerShape(8.dp),
             small = RoundedCornerShape(4.dp)
         ),
@@ -305,9 +270,7 @@ fun GameListItem(game: Game, onJoinGame: (Int?) -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Player Icon & Info
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // avatar/icon
                 Box(
                     modifier = Modifier
                         .size(48.dp)
@@ -341,7 +304,6 @@ fun GameListItem(game: Game, onJoinGame: (Int?) -> Unit) {
                 modifier = Modifier.weight(1f),
                 contentAlignment = Alignment.CenterEnd
             ) {
-                // Action Button
                 Button(
                     onClick = { onJoinGame(game.id) },
                     shape = RoundedCornerShape(12.dp),
@@ -357,14 +319,34 @@ fun GameListItem(game: Game, onJoinGame: (Int?) -> Unit) {
 }
 
 @Composable
-fun NewGameButton(isEnabled : Boolean, onClick: () -> Unit) {
+fun PlayComputerButton(onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth(0.9f)
+            .height(60.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = HellesGreen),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+    ) {
+        Text(
+            text = "PLAY VS COMPUTER",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = Color.White
+        )
+    }
+}
+
+@Composable
+fun NewGameButton(isEnabled: Boolean, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         enabled = isEnabled,
         modifier = Modifier
             .fillMaxWidth(0.9f)
             .height(60.dp),
-        shape = RoundedCornerShape(24.dp), // Extra Large shape for primary action
+        shape = RoundedCornerShape(24.dp),
         colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
     ) {
@@ -381,7 +363,6 @@ fun NewGameButton(isEnabled : Boolean, onClick: () -> Unit) {
     }
 }
 
-// Helper Composable for the Bottom Sheet Content
 @Composable
 fun BottomSheetContent(
     gameLengthInput: String,
@@ -396,7 +377,6 @@ fun BottomSheetContent(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // --- Title ---
         Text(
             text = "Configure New Game",
             style = MaterialTheme.typography.titleLarge,
@@ -404,11 +384,9 @@ fun BottomSheetContent(
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        // --- Input Field ---
         OutlinedTextField(
             value = gameLengthInput,
             onValueChange = {
-                // Basic numeric filtering
                 if (it.length <= 2 && it.all { char -> char.isDigit() }) {
                     onLengthChange(it)
                 }
@@ -419,9 +397,7 @@ fun BottomSheetContent(
                 .fillMaxWidth()
                 .padding(bottom = 24.dp),
             singleLine = true,
-            isError = isInputError, // Toggles red border and error color
-
-            // Optional: Provide a helper text displaying the error message
+            isError = isInputError,
             supportingText = {
                 if (isInputError) {
                     Text(
@@ -435,12 +411,11 @@ fun BottomSheetContent(
         if (!isInputError) {
             Spacer(modifier = Modifier.height(16.dp))
         }
-        // --- Buttons ---
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Dismiss Button
             OutlinedButton(
                 onClick = onDismiss,
                 modifier = Modifier
@@ -450,16 +425,15 @@ fun BottomSheetContent(
                 Text("Cancel")
             }
 
-            // Create Game Button
             Button(
                 onClick = onCreateGame,
-                enabled = !isInputError, // Enable only if valid number
+                enabled = !isInputError,
                 modifier = Modifier.weight(1f)
             ) {
                 Text("CREATE GAME")
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp)) // Padding below buttons
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
